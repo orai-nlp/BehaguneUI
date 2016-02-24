@@ -1,0 +1,86 @@
+{% load i18n %}{% load tags %}
+<a href="#close" title="Close" class="close" onclick='$(this).parent().modal("hide");return false;'>X</a>
+<div id="row_2">
+<div class="post-preview">
+    <h4 class="text-center all">{% trans "Denak" %} </h4>
+    <div class="mention mention_head" id="{{ i.mention_id }}" mota="{{ i.source.type }}" kwrds="" lang="{{ i.lang }}" name="all">
+        <div class="m_text {% if not user.is_authenticated %}no_polarity{% endif %}">{% trans "Aipamena" %}</div>
+        <div class="m_jatorria">{% trans "Jatorria" %}</div>
+        <div class="m_influence m_infl_{{ i.source.type }}" value="{{ i.source.influence }}"><a href="#" id="influence" class="ord {% if order == 'influence' %}selected {{ ord_dir }}{% endif %}">{% trans "Eragina" %}</a></div>
+        <div class="m_data"><a class="ord {% if order == 'data' %}selected {{ ord_dir }}{% endif %}" id="data" href="#">{% trans "Data" %}</a></div>
+        <div class="m_link">{% trans "Esteka" %}</div>
+        {% if user.is_authenticated %}
+        <div id="polarity_{{ i.mention_id }}" class="m_polarity"><a href="#" class="ord {% if order == 'polarity' %}selected {{ ord_dir }}{% endif %}"id="polarity">{% trans "Polaritatea" %}</a></div>
+        {% endif %}
+    </div>
+    <div class="post-preview mentions">
+        {% for i in negatiboak %}
+        <div class="mention" id="{{ i.mention_id }}" mota="{{ i.source.type }}" kwrds="" lang="{{ i.lang }}">
+            <div id="text_{{ i.mention_id }}" class="m_text {% if not user.is_authenticated %}no_polarity{% endif %}"><img {% if i.source.type == 'Twitter' %}src="{{ STATIC_URL }}img/twitter_icon.png"{% endif %}{% if i.source.type == 'press' %}src="{{ STATIC_URL }}img/press_icon.png"{% endif %} > {{ i.text|replace_in_tweets|cut:i.source.type|safe }} 
+            </div>
+            <div id="src_{{ i.mention_id }}" class="m_jatorria">
+                <a href="#" onclick="reload_from_user('{{ i.source.source_name }}');return false;" >{{ i.source.source_name }}</a>
+            </div>
+            <div id="infl_{{ i.mention_id }}" class="m_influence m_infl_{{ i.source.type }}" value="{{ i.source.influence }}">{{ i.source.influence|round }}</div>
+            <div id="data_{{ i.mention_id }}" class="m_data">{{ i.date|clean_date }}</div>
+            <div id="link_{{ i.mention_id }}" class="m_link"><a href="{{ i.url }}" target="_blank" >+</a>
+            </div>
+            {% if user.is_authenticated %}
+            <div id="polarity_{{ i.mention_id }}" class="m_polarity">
+                <input value="P" type="checkbox" {% if i|get_polarity == 'P' %}checked {% endif %}> {% trans "Positiboa" %}
+                <input value="N" type="checkbox" {% if i|get_polarity == 'N' %}checked {% endif %}> {% trans "Negatiboa" %}
+                <input value="NEU" type="checkbox" {% if i|get_polarity == 'NEU' %}checked {% endif %}> {% trans "Neutroa" %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    <script>
+        {% if user.is_authenticated %}
+        $(".mention input").click(function(){
+        if ($(this).prop( "checked" )){
+            
+            update_polarity($(this));
+            
+        }
+        else{
+            $(this).prop( "checked", true );
+        }
+        });
+        {% endif %}
+        
+        $(".ord").click(function(){
+        if ($(this).hasClass("desc")){
+            $("a.ord").attr("class","ord");
+            $(this).attr("class","ord asc selected");
+            }
+        else{
+            $("a.ord").attr("class","ord");
+            $(this).attr("class","ord desc selected");
+            }
+        show_all_tweets_pagination('{{ polarity }}', 1);
+        return false
+        });
+        
+    </script>
+    <div class="k2Pagination">
+        <ul class="pagination-list">
+            {% if page != 1 %}
+            <li><a href="" onclick="show_all_tweets_pagination('{{ polarity }}', 1);return false;" >1</a></li>
+            {% if page > 1 %}
+            <li><a href="" onclick="show_all_tweets_pagination('{{ polarity }}', {{ page }}-1);return false;" ><</a></li>
+            {% endif %}
+            {% endif %}
+            <li><span>{{ page }}</span></li>
+            {% if page < pagination_range|length %}
+            <li><a href="" onclick="show_all_tweets_pagination('{{ polarity }}', {{ page }} +1);return false;" >></a></li>
+            {% endif %}
+            {% if page != pagination_range|length %}
+            {% if pagination_range|length != 0 %}
+            <li><a href="" onclick="show_all_tweets_pagination('{{ polarity }}', {{ pagination_range|length }} );return false;" >{{ pagination_range|length }}</a></li>
+            {% endif %}
+            {% endif %}
+        </ul>
+    </div>
+</div>
+

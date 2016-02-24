@@ -1,0 +1,25 @@
+<div id="time_neutroak"> {% for i in time_neutroak_list %}{{ i|safe }}{% if not forloop.last %}|{% endif %}{% endfor %}</div>
+<div id="time_neutroak_max">{{ time_neutroak_list_max }}</div>
+<div id="time_positiboak">{% for i in time_positiboak_list %}{{ i|safe }}{% if not forloop.last %}|{% endif %}{% endfor %}</div>
+<div id="time_positiboak_max">{{ time_positiboak_list_max }}</div>
+<div id="time_negatiboak">{% for i in time_negatiboak_list %}{{ i|safe }}{% if not forloop.last %}|{% endif %}{% endfor %}</div>
+<div id="time_negatiboak_max">{{ time_negatiboak_list_max }}</div>
+<div id="keyword_categories">[{{ top_keyword_categories|safe }}]</div>
+<div id="top_keyword">{{ top_keyword_values }}</div>
+<div id="top_keyword_cpos">[{{ top_keyword_categories_pos|safe }}]</div>
+<div id="top_keyword_pos">{{ top_keyword_values_pos }}</div>
+<div id="top_keyword_cneg">[{{ top_keyword_categories_neg|safe }}]</div>
+<div id="top_keyword_neg">{{ top_keyword_values_neg }}</div>
+<div id="top_keyword_media">[{{ top_media_categories|safe }}]</div>
+<div id="top_keyword_cmedia">{{ top_media_values }}</div>
+<div id="top_keyword_media_pos">[{{ top_media_categories_pos|safe }}]</div>
+<div id="top_keyword_cmedia_pos">{{ top_media_values_pos }}</div>
+<div id="top_keyword_media_neg">[{{ top_media_categories_neg|safe }}]</div>
+<div id="top_keyword_cmedia_neg">{{ top_media_values_neg }}</div>
+<div id="top_keyword_twitter">[{{ top_twitter_categories|safe }}]</div>
+<div id="top_keyword_ctwitter">{{ top_twitter_values }}</div>
+<div id="top_keyword_twitter_pos">[{{ top_twitter_categories_pos|safe }}]</div>
+<div id="top_keyword_ctwitter_pos">{{ top_twitter_values_pos }}</div>
+<div id="top_keyword_twitter_neg">[{{ top_twitter_categories_neg|safe }}]</div>
+<div id="top_keyword_ctwitter_neg">{{ top_twitter_values_neg }}</div>
+

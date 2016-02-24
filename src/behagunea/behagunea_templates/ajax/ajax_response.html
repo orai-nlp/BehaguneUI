@@ -1,0 +1,98 @@
+{% load i18n %}{% load tags %}
+<div id="row_2">
+                <div class="percent_40">
+                    <div class="post-preview">
+                        <h4 class="text-center">{% trans "Denak" %} </h4>
+                        <div class="post-preview">
+                            {% for i in denak %}
+                            <div class="mention" id="{{ i.mention_id }}" mota="{{ i.source.type }}" kwrds="" lang="{{ i.lang }}">                                
+                                <div id="text_{{ i.mention_id }}" class="m_text"><img {% if i.source.type == 'Twitter' %}src="{{ STATIC_URL }}img/twitter_icon.png"{% endif %}{% if i.source.type == 'press' %}src="{{ STATIC_URL }}img/press_icon.png"{% endif %} > <a href="#" onclick="reload_from_user('{{ i.source.source_name }}');return false;" class="source_name"  >{{ i.source.source_name }}</a>: {{ i.text|replace_in_tweets|cut:i.source.type|safe }} <a href="{{ i.url }}" target="_blank" >+</a>
+                                </div>
+                                <!--<div id="src_{{ i.mention_id }}" class="m_jatorria">
+                                    <a href="#" onclick="reload_from_user('{{ i.source.source_name }}');return false;" >{{ i.source.source_name }}</a>
+                                </div>-->
+                                
+                                <div id="data_{{ i.mention_id }}" class="m_data">{{ i.date|clean_date }}</div>
+                                
+                            </div>
+                            {% endfor %}
+                            <a href="#" class="show_more" name="all" onclick='show_all_tweets("all");'>
+                                <p>{% trans "Erakutsi gehiago +" %}</p>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="percent_40">
+                    <div class="post-preview">
+                        <div class="post-preview">
+                            <h4 class="text-center">{% trans "Aipamen positiboak" %} <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></h4>
+                            {% for i in positiboak %}
+                            <div class="mention" id="{{ i.mention_id }}" mota="{{ i.source.type }}" kwrds="" lang="{{ i.lang }}">
+                                <div id="text_{{ i.mention_id }}" class="m_text"><img {% if i.source.type == 'Twitter' %}src="{{ STATIC_URL }}img/twitter_icon.png"{% endif %}{% if i.source.type == 'press' %}src="{{ STATIC_URL }}img/press_icon.png"{% endif %} > <a href="#" onclick="reload_from_user('{{ i.source.source_name }}');return false;" class="source_name"  >{{ i.source.source_name }}</a>: {{ i.text|replace_in_tweets|cut:i.source.type|safe }} <a href="{{ i.url }}" target="_blank" >+</a>
+                                </div>
+                                <!--<div id="src_{{ i.mention_id }}" class="m_jatorria">
+                                    <a href="#" onclick="reload_from_user('{{ i.source.source_name }}');return false;" >{{ i.source.source_name }}</a>
+                                </div>-->
+                                
+                                <div id="data_{{ i.mention_id }}" class="m_data">{{ i.date|clean_date }}</div>
+                                
+                            </div>
+                            {% endfor %}
+                            <a href="#" class="show_more" name="all" onclick='show_all_tweets("P");'>
+                                <p>{% trans "Erakutsi gehiago +" %}</p>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="percent_40">
+                    <div class="post-preview">
+                        <div class="post-preview">
+                            <h4 class="text-center">{% trans "Aipamen negatiboak" %} <span class="glyphicon glyphicon-minus" aria-hidden="true"></span></h4>
+                            {% for i in negatiboak %}
+                            <div class="mention" id="{{ i.mention_id }}" mota="{{ i.source.type }}" kwrds="" lang="{{ i.lang }}">
+                                <div id="text_{{ i.mention_id }}" class="m_text"><img {% if i.source.type == 'Twitter' %}src="{{ STATIC_URL }}img/twitter_icon.png"{% endif %}{% if i.source.type == 'press' %}src="{{ STATIC_URL }}img/press_icon.png"{% endif %} > <a href="#" onclick="reload_from_user('{{ i.source.source_name }}');return false;" class="source_name" >{{ i.source.source_name }}</a>: {{ i.text|replace_in_tweets|cut:i.source.type|safe }} <a href="{{ i.url }}" target="_blank" >+</a>
+                                </div>
+                                <!--<div id="src_{{ i.mention_id }}" class="m_jatorria">
+                                    <a href="#" onclick="reload_from_user('{{ i.source.source_name }}');return false;" >{{ i.source.source_name }}</a>
+                                </div>-->
+                                
+                                <div id="data_{{ i.mention_id }}" class="m_data">{{ i.date|clean_date }}</div>
+
+                            </div>
+                            {% endfor %}
+                            <a href="#" class="show_more" name="all" onclick='show_all_tweets("N");'>
+                                <p>{% trans "Erakutsi gehiago +" %}</p>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+<div id="neutroak">{{ neutroak_c }}</div>
+<div id="positiboak">{{ positiboak_c }}</div>
+<div id="negatiboak">{{ negatiboak_c }}</div>
+<div id="lainoa">{{ lainoa|safe }}</div>
+<div id="source_lainoa">{{ source_lainoa|safe }}</div>
+<div id="information_tag">{{ information_tag }}</div>
+<div id="neutroak_c">{{ neutroak_c }}</div>
+<div id="positiboak_c">{{ positiboak_c }}</div>
+<div id="negatiboak_c">{{ negatiboak_c }}</div>
+<div id="denak_c">{{ denak_c }}</div>
+<div id="time_neutroak_list">{% for i in time_neutroak_list %}{{ i|safe }}{% if not forloop.last %}|{% endif %}{% endfor %}</div>
+<div id="time_neutroak_list_max">{{ time_neutroak_list_max }}</div>
+<div id="time_positiboak_list">{% for i in time_positiboak_list %}{{ i|safe }}{% if not forloop.last %}|{% endif %}{% endfor %}</div>
+<div id="time_positiboak_list_max">{{ time_positiboak_list_max }}</div>
+<div id="time_negatiboak_list">{% for i in time_negatiboak_list %}{{ i|safe }}{% if not forloop.last %}|{% endif %}{% endfor %}</div>
+<div id="time_negatiboak_list_max">{{ time_negatiboak_list_max }}</div>
+
+<script id="runscript">
+{% for i in denak %}
+            $( "#text_{{ i.mention_id }} .source_name" ).tooltipster({content:$('<div><img style="width:30px" src="{{ STATIC_URL }}images/{% if i.source.type == "Twitter" %}klout-logo_transp.png{% endif %}{% if i.source.type == "press" %}pgrank_logo.png{% endif %}"> {{ i.source.influence|round }}</div>')});
+            {% endfor %}
+{% for i in positiboak %}
+            $( "#text_{{ i.mention_id }} .source_name" ).tooltipster({content:$('<div><img style="width:30px" src="{{ STATIC_URL }}images/{% if i.source.type == "Twitter" %}klout-logo_transp.png{% endif %}{% if i.source.type == "press" %}pgrank_logo.png{% endif %}"> {{ i.source.influence|round }}</div>')});
+            {% endfor %}
+{% for i in negatiboak %}
+            $( "#text_{{ i.mention_id }} .source_name" ).tooltipster({content:$('<div><img style="width:30px" src="{{ STATIC_URL }}images/{% if i.source.type == "Twitter" %}klout-logo_transp.png{% endif %}{% if i.source.type == "press" %}pgrank_logo.png{% endif %}"> {{ i.source.influence|round }}</div>')});
+            {% endfor %}         
+</script>
+

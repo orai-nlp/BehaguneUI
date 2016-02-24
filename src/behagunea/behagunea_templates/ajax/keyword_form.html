@@ -1,0 +1,15 @@
+{% load i18n %}{% load tags %}
+<div class="keywordmodal-container">
+    <h1 style="float:right;"><a href="#" data-toggle="modal" data-target="#keyword-modal">x</a></h1>
+    <br>
+    <h1>{% trans "Kudeatu gakoa" %}</h1>
+    <br>
+    <form method="POST" action="#">{% csrf_token %}
+        {{ keyword_form }}
+        <input type="submit" name="save_keyword" class="login loginmodal-submit" value="{% trans 'Gorde' %}">
+    </form>
+    <!--<div class="login-help">
+        <a href="#">{% trans "Erregistratu" %}</a> - <a href="#">{% trans "Pasahitza ahaztu duzu?" %}</a>
+         </div>-->
+</div>
+

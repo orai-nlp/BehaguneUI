@@ -1,0 +1,68 @@
+{% load i18n %}{% load tags %}
+<div id="row_2">
+    <div class="percent_40">
+        <div class="post-preview">
+            <h4 class="text-center">{% trans "Aipamen neutroak" %} </h4>
+            <div class="post-preview">
+                {% for i in neutroak %}
+                <div class="mention" id="{{ i.mention_id }}" mota="Twitter" kwrds="" lang="{{ i.lang }}">
+                    <div id="text_{{ i.mention_id }}" class="m_text"><img {% if i.source.type == 'Twitter' %}src="{{ STATIC_URL }}img/twitter_icon.png"{% endif %}{% if i.source.type == 'press' %}src="{{ STATIC_URL }}img/press_icon.png"{% endif %} > {{ i.text|replace_in_tweets|safe }} 
+                    </div>
+                    <div id="src_{{ i.mention_id }}" class="m_jatorria">
+                        <a href="index.cgi?hizk=eu&author={{ i.source.source_name }}" target="_self" >{{ i.source.source_name }}</a>
+                    </div>
+                    <div id="infl_{{ i.mention_id }}" class="m_influence m_infl_Twitter" value="{{ i.source.influence }}">{{ i.source.influence|round }}</div>
+                    <div id="data_{{ i.mention_id }}" class="m_data">{{ i.date|clean_date }}</div>
+                    <div id="link_{{ i.mention_id }}" class="m_link"><a href="{{ i.url }}" target="_blank" >+</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="percent_40">
+        <div class="post-preview">
+            <div class="post-preview">
+                <h4 class="text-center">{% trans "Aipamen positiboak" %} <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></h4>
+                {% for i in positiboak %}
+                <div class="mention" id="{{ i.mention_id }}" mota="Twitter" kwrds="" lang="{{ i.lang }}">
+                    <div id="text_{{ i.mention_id }}" class="m_text"><img {% if i.source.type == 'Twitter' %}src="{{ STATIC_URL }}img/twitter_icon.png"{% endif %}{% if i.source.type == 'press' %}src="{{ STATIC_URL }}img/press_icon.png"{% endif %} > {{ i.text|replace_in_tweets|safe }} 
+                    </div>
+                    <div id="src_{{ i.mention_id }}" class="m_jatorria">
+                        <a href="index.cgi?hizk=eu&author={{ i.source.source_name }}" target="_self" >{{ i.source.source_name }}</a>
+                    </div>
+                    <div id="infl_{{ i.mention_id }}" class="m_influence m_infl_Twitter" value="{{ i.source.influence }}">{{ i.source.influence|round }}</div>
+                    <div id="data_{{ i.mention_id }}" class="m_data">{{ i.date|clean_date }}</div>
+                    <div id="link_{{ i.mention_id }}" class="m_link"><a href="{{ i.url }}" target="_blank" >+</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="percent_40">
+        <div class="post-preview">
+            <div class="post-preview">
+                <h4 class="text-center">{% trans "Aipamen negatiboak" %} <span class="glyphicon glyphicon-minus" aria-hidden="true"></span></h4>
+                {% for i in negatiboak %}
+                <div class="mention" id="{{ i.mention_id }}" mota="Twitter" kwrds="" lang="{{ i.lang }}">
+                    <div id="text_{{ i.mention_id }}" class="m_text"><img {% if i.source.type == 'Twitter' %}src="{{ STATIC_URL }}img/twitter_icon.png"{% endif %}{% if i.source.type == 'press' %}src="{{ STATIC_URL }}img/press_icon.png"{% endif %} > {{ i.text|replace_in_tweets|safe }} 
+                    </div>
+                    <div id="src_{{ i.mention_id }}" class="m_jatorria">
+                        <a href="index.cgi?hizk=eu&author={{ i.source.source_name }}" target="_self" >{{ i.source.source_name }}</a>
+                    </div>
+                    <div id="infl_{{ i.mention_id }}" class="m_influence m_infl_Twitter" value="{{ i.source.influence }}">{{ i.source.influence|round }}</div>
+                    <div id="data_{{ i.mention_id }}" class="m_data">{{ i.date|clean_date }}</div>
+                    <div id="link_{{ i.mention_id }}" class="m_link"><a href="{{ i.url }}" target="_blank" >+</a>
+                    </div>
+                </div>
+                {% endfor %}  
+            </div>
+        </div>
+    </div>
+</div>
+<div id="neutroak">{{ neutroak_c }}</div>
+<div id="positiboak">{{ positiboak_c }}</div>
+<div id="negatiboak">{{ negatiboak_c }}</div>
+<div id="lainoa">{{ lainoa|safe }}</div>
+

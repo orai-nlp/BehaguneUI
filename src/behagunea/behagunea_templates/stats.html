@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+{% load i18n %}
+{% load tags %}
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="description" content="">
+        <meta name="author" content="">
+        <title>Behagunea</title>
+        <!-- Bootstrap Core CSS -->
+        <!--<link href="{{ STATIC_URL }}css/bootstrap.min.css" rel="stylesheet">-->
+        <link href="{{ STATIC_URL }}img/favicon.ico" rel="icon" />
+        <!-- Custom CSS -->
+        <!--<link href="{{ STATIC_URL }}css/clean-blog.css" rel="stylesheet">-->
+        <link href="{{ STATIC_URL }}css/font.css" rel="stylesheet">
+        <link href="{{ STATIC_URL }}css/template.css" rel="stylesheet">
+        <link href="{{ STATIC_URL }}css/perso.css" rel="stylesheet">
+        <link href="{{ STATIC_URL }}css/custom.css" rel="stylesheet">
+        <link href="{{ STATIC_URL }}css/jquery-ui.min.css" rel="stylesheet">
+        <!-- Custom Fonts -->
+        <link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+        <link href='http://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+        <link href='http://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800' rel='stylesheet' type='text/css'>
+        <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+        <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>        
+        <![endif]-->
+
+    </head>
+    <body data-spy="scroll" data-target="#menuEzkerra" class="site com_k2 view-item layout-item no-task itemid-1113">
+        <div class="body goitop">
+            <div class="container">
+                <header class="header span6" role="banner">
+                    <div class="custom">
+                        <p><a href="http://energiaolatuak.dss2016.eu/eu/"><img src="{{ STATIC_URL}}img/dss2016eu_eur.png" alt="dss2016eu eur" width="300" height="80"></a><a target="blank_" title="IXA taldea" href="http://ixa.si.ehu.es/Ixa"><img src="{{ STATIC_URL}}images/ixa.png"></a><a target="blank_" title="Elhuyar Fundazioa" href="https://www.elhuyar.eus/"><img src="{{ STATIC_URL}}images/elhuyar-ht-garden-noht.png" style="padding-left:20px;"></a></p>
+                    </div>
+                </header>
+                <div class="span6">
+                    <div class="custom pull-right sozialak">
+                        <p><a href="http://energiaolatuak.dss2016.eu/es/boletin?view=default">{% trans "buletina" %}&nbsp; </a><a href="https://www.facebook.com/dss2016" target="_blank"><img onmouseover="this.src='{{ STATIC_URL }}/img/ico-azul-face.png';" onmouseout="this.src='{{ STATIC_URL }}/img/ico-gris-face.png';" src="{{ STATIC_URL }}/img/ico-gris-face.png" alt="ico-gris-face" width="40" height="40"></a><a href="https://twitter.com/DSS2016" target="_blank"><img onmouseover="this.src='{{ STATIC_URL }}/img/ico-azul-twi.png';" onmouseout="this.src='{{ STATIC_URL }}/img/ico-gris-twi.png';" src="{{ STATIC_URL }}/img/ico-gris-twi.png" alt="ico-gris-twi" width="40" height="40"></a><a href="https://instagram.com/dss2016" target="_blank"><img onmouseover="this.src='{{ STATIC_URL }}/img/ico-azul-inst.png';" onmouseout="this.src='{{ STATIC_URL }}/img/ico-gris-inst.png';" src="{{ STATIC_URL }}/img/ico-gris-inst.png" alt="ico-gris-inst" width="40" height="40"></a><a href="https://www.youtube.com/user/sansebastian2016" target="_blank"><img onmouseover="this.src='{{ STATIC_URL }}/img/ico-azul-tube.png';" onmouseout="this.src='{{ STATIC_URL }}/img/ico-gris-tube.png';" src="{{ STATIC_URL }}/img/ico-gris-tube.png" alt="ico-gris-tube" width="40" height="40"></a>&nbsp;<a title="Hiria" href="http://www.donostia.eus/bizi2016" target="_blank"><img style="margin-left: 15px;" onmouseover="this.src='{{ STATIC_URL }}/img/info_azul.png';" onmouseout="this.src='{{ STATIC_URL }}/img/info_gris.png';" src="{{ STATIC_URL }}/img/info_gris.png" alt="info gris" width="25" height="25"></a></p>
+                    </div>
+                    <div class="mod-languages hizkuntzak">
+                        <ul class="lang-inline">
+                            {% for key,value in LANGUAGES %}
+                            {% if LANGUAGE_CODE == key %}
+                            <li class="lang-active" dir="ltr">
+                                <a href="">{{ key|upper }}</a>
+                            </li>
+                            {% else %}
+                            <li>
+                                <form name="setLang{{ key }}" action="/i18n/setlang/" method="POST">{% csrf_token %}
+                                    <input name="next" type="hidden" value="#" />
+                                    <input type="hidden" name="language" value="{{ key }}" />
+                                </form>
+                                <a href="#" onclick="document.setLang{{ key }}.submit();return false;">{{ key|upper }}</a>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="mobile">
+            <h2><a href="/">Behagunea</a></h2>
+        </div>
+        <ul class="profile_menu">
+            {% if user.is_authenticated %}
+            <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
+            <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+            <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+            <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
+            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
+            {% else %}
+            <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
+            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
+            {% endif %}
+        </ul>
+        <div class="body saltua parafi">
+            <div class="container">
+                <div class="span12 ezezkmargin menulerroa">
+                    <nav class="navigation span12 ezezkmargin" role="navigation">
+                        <div class="navbar pull-left">
+                            <a class="btn btn-navbar collapsed" data-toggle="collapse" data-target=".menuorokorra">
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                            </a>
+                        </div>
+                        <!-- Button Menu Mobile END -->
+                        <ul class="nav menu nav-pills menuorokorra BuruMenua collapse ">
+                            <li class="parent ez_mobile">
+                                <h2><a href="/">Behagunea</a></h2>
+                            </li>
+                            {% if user.is_authenticated %}
+                                <li class="parent ez_mobile" style="border-left-style: none;">
+                                    <a href="/export" id="export" class="btn">{% trans "Esportatu datuak" %}</a>
+                                </li>
+                            {% endif %}
+                            <ul class="mobile">
+                                {% if user.is_authenticated %}
+                                <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
+                                <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+                                <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+                                <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
+                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
+                                {% else %}
+                                <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
+                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
+                                {% endif %}
+                            </ul>
+                            <li class="ez_mobile"/>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <div class="container">
+            <div id="filter_div">
+                <h2>{% trans "Filtroak" %}</h2>
+                {% trans "Data" %}{{ filter_form.date_b }}
+                <a id="data_b_a" href="#" onclick='$("#id_date_b").focus();return false;'><img src="{{ STATIC_URL }}img/calendar.png" class="calendar"></a>
+                >
+                {{ filter_form.date_e }}
+                <a id="data_e_a" href="#" onclick='$("#id_date_e").focus();return false;'><img src="{{ STATIC_URL }}img/calendar.png" class="calendar"></a>
+                {% trans "Itsasargia" %}
+                {{ filter_form.category }}
+                {% trans "Proiektua" %}
+                {{ filter_form.project }}
+                <input class="btn" type="button" name="" id="filter_results" value="{% trans 'Filtratu' %}" onclick="reload_with_filters_stats();">
+            </div>
+            <div class="progression_stat" class="row">
+                <div class="percent_100 underlined">
+                    <h3 class="">{% trans "Progresioa" %}</h3>
+                </div>
+                <div id="row_1">
+                    <div id="timeChart" class="post-preview">
+                        <svg class="visualisation" style="width:90%;height:300px;"></svg>
+                    </div>
+                    <div class="percent_30">
+                    </div>
+                </div>
+            </div>
+            <div class="top_keyword_stat" class="row">
+                <div class="percent_100 underlined">
+                    <h3 class="">{% trans "TOP Keyword" %}</h3>
+                </div>
+                <div id="row_1">
+                    <div class="percent_30">
+                        <div class="post-preview">
+                            <p>{% trans "Denak" %}</p>
+                            <div id="barChartAll" class="post-preview"></div>
+                        </div>
+                    </div>
+                    <div class="percent_30">
+                        <div class="post-preview">
+                            <p>{% trans "Positiboak" %}</p>
+                            <div id="barChartPos" class="post-preview"></div>
+                        </div>
+                    </div>
+                    <div class="percent_30">
+                        <div class="post-preview">
+                            <p>{% trans "Negatiboak" %}</p>
+                            <div id="barChartNeg" class="post-preview"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="top_media_stat" class="row">
+                <div class="percent_100 underlined">
+                    <h3 class="">{% trans "TOP MEDIA" %}</h3>
+                </div>
+                <div id="row_1">
+                    <div class="percent_30">
+                        <div class="post-preview">
+                            <p>{% trans "Denak" %}</p>
+                            <div id="barChart2All" class="post-preview"></div>
+                        </div>
+                    </div>
+                    <div class="percent_30">
+                        <div class="post-preview">
+                            <p>{% trans "Positiboak" %}</p>
+                            <div id="barChart2Pos" class="post-preview"></div>
+                        </div>
+                    </div>
+                    <div class="percent_30">
+                        <div class="post-preview">
+                            <p>{% trans "Negatiboak" %}</p>
+                            <div id="barChart2Neg" class="post-preview"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% if user.is_authenticated %}
+                <div class="top_twitter_stat" class="row">
+                    <div class="top_twitter_stat" class="row">
+                        <div class="percent_100 underlined">
+                            <h3 class="">{% trans "TOP Twitter" %}</h3>
+                        </div>
+                        <div id="row_1">
+                            <div class="percent_30">
+                                <div class="post-preview">
+                                    <p>{% trans "Denak" %}</p>
+                                    <div id="barChart3All" class="post-preview"></div>
+                                </div>
+                            </div>
+                            <div class="percent_30">
+                                <div class="post-preview">
+                                    <p>{% trans "Positiboak" %}</p>
+                                    <div id="barChart3Pos" class="post-preview"></div>
+                                </div>
+                            </div>
+                            <div class="percent_30">
+                                <div class="post-preview">
+                                    <p>{% trans "Negatiboak" %}</p>
+                                    <div id="barChart3Neg" class="post-preview"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        <hr>
+        <div id="loading_modal" class="modal text-center" style="display:none;">
+            <h1>{% trans "Datuak eguneratzen..." %}</h1>
+            <img src="{{ STATIC_URL}}img/ajax-loader.gif"/>
+        </div>
+        <div id="modal_tweets" class="modal text-center" style="display:none;" data-backdrop="static"></div>
+        <div class="modal fade" id="login-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true" style="display: none;">
+            <div class="modal-dialog">
+                <div class="loginmodal-container">
+                    <h1 style="float:right;"><a href="#" data-toggle="modal" data-target="#login-modal">x</a></h1>
+                    <br>
+                    <h1>{% trans "Sartu zure kontuan" %}</h1>
+                    <br>
+                    <form method="POST" action="">{% csrf_token %}
+                        {{ login_form }}
+                        <input type="submit" name="login" class="login loginmodal-submit" value="{% trans 'Sartu' %}">
+                    </form>
+                    <!--<div class="login-help">
+                        <a href="#">{% trans "Erregistratu" %}</a> - <a href="#">{% trans "Pasahitza ahaztu duzu?" %}</a>
+                         </div>-->
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="mention-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true" style="display: none;">
+            <div class="modal-dialog">
+                <div class="loginmodal-container">
+                    <h1 style="float:right;"><a href="#" data-toggle="modal" data-target="#mention-modal">x</a></h1>
+                    <br>
+                    <h1>{% trans "Bidali zure iritzia" %}</h1>
+                    <br>
+                    <form method="POST" action="">{% csrf_token %}
+                        {{ mention_form }}
+                        <input type="submit" name="mention" class="login loginmodal-submit" value="{% trans 'Bidali' %}">
+                    </form>
+                    <!--<div class="login-help">
+                        <a href="#">{% trans "Erregistratu" %}</a> - <a href="#">{% trans "Pasahitza ahaztu duzu?" %}</a>
+                         </div>-->
+                </div>
+            </div>
+        </div>
+        <!-- jQuery -->
+        <script src="{{ STATIC_URL }}js/jquery.js"></script>
+        <!-- Bootstrap Core JavaScript -->
+        <script src="{{ STATIC_URL }}js/bootstrap.min.js"></script>
+        <script src="{{ STATIC_URL }}js/d3.min.js"></script>
+        <script src="{{ STATIC_URL }}js/d3.layout.cloud.js"></script>
+        <!-- Pie chart -->
+        <script src="{{ STATIC_URL }}js/d3pie.min.js"></script>
+        <script src="{{ STATIC_URL }}js/jquery-ui.min.js"></script>
+        <script src="{{ STATIC_URL }}js/clean-blog.js"></script>
+        <!-- Custom Theme JavaScript -->
+        <script src="{{ STATIC_URL }}js/scripts.js"></script>
+        <script>
+            {% if  mention_form.errors %}
+                $("#mention-modal").modal('show');
+            {% endif %}
+            var lainoa ='{}';
+            var source_lainoa='{}';
+            var neutroak={{ neutroak_c }};
+            var positiboak={{ positiboak_c }};
+            var negatiboak={{ negatiboak_c }};
+            var time_neutroak_list = [{% for i in time_neutroak_list %}{{ i|safe }},{% endfor %}];
+            var time_neutroak_list_max = {{ time_neutroak_list_max }};
+            var time_positiboak_list = [{% for i in time_positiboak_list %}{{ i|safe }},{% endfor %}];
+            var time_positiboak_list_max = {{ time_positiboak_list_max }};
+            var time_negatiboak_list = [{% for i in time_negatiboak_list %}{{ i|safe }},{% endfor %}];
+            var time_negatiboak_list_max = {{ time_negatiboak_list_max }};
+            var top_keyword_categories = [{{ top_keyword_categories|safe }}];
+            var top_keyword_values = {{ top_keyword_values }};
+            var top_keyword_categories_pos = [{{ top_keyword_categories_pos|safe }}];
+            var top_keyword_values_pos = {{ top_keyword_values_pos }};
+            var top_keyword_categories_neg = [{{ top_keyword_categories_neg|safe }}];
+            var top_keyword_values_neg = {{ top_keyword_values_neg }};
+            var top_media_categories = [{{ top_media_categories|safe }}];
+            var top_media_values = {{ top_media_values }};
+            var top_media_categories_pos = [{{ top_media_categories_pos|safe }}];
+            var top_media_values_pos = {{ top_media_values_pos }};
+            var top_media_categories_neg = [{{ top_media_categories_neg|safe }}];
+            var top_media_values_neg = {{ top_media_values_neg }};
+            var top_twitter_categories = [{{ top_twitter_categories|safe }}];
+            var top_twitter_values = {{ top_twitter_values }};
+            var top_twitter_categories_pos = [{{ top_twitter_categories_pos|safe }}];
+            var top_twitter_values_pos = {{ top_twitter_values_pos }};
+            var top_twitter_categories_neg = [{{ top_twitter_categories_neg|safe }}];
+            var top_twitter_values_neg = {{ top_twitter_values_neg }};
+            stats_page_graphs();
+            stats_page_filters();
+            var day_names = ['{% trans "Sun" %}','{% trans "Mon" %}','{% trans "Tue" %}','{% trans "Wed" %}','{% trans "Thu" %}','{% trans "Fri" %}','{% trans "Sat" %}'];
+            var month_names = [ '{% trans "January" %}', '{% trans "February" %}', '{% trans "March" %}', '{% trans "April" %}', '{% trans "May" %}', '{% trans "June" %}', '{% trans "July" %}', '{% trans "August" %}', '{% trans "September" %}', '{% trans "October" %}', '{% trans "November" %}', '{% trans "December" %}' ];
+            $("#id_date_b").datepicker({dayNamesMin: day_names,monthNames:month_names, firstDay: 1});
+            $("#id_date_e").datepicker({dayNamesMin: day_names,monthNames:month_names, firstDay: 1});
+            
+            
+        </script> 
+    </body>
+</html>
+

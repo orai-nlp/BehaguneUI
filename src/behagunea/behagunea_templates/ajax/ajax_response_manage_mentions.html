@@ -1,0 +1,50 @@
+{% load i18n %}{% load tags %}
+<table class="mentions">
+    <thead>
+        <tr>
+            <td>ID</td>
+            <td>{% trans "Testua" %}</td>
+            <td>{% trans "Polaritatea" %}</td>
+            <td>{% trans "Data" %}</td>
+            <td>{% trans "Iturria" %}</td>
+            <td>{% trans "Hizk" %}</td>
+            <td></td>
+        </tr>
+    </thead>
+    <tbody>
+        {% for mention in mentions %}
+        <tr id="{{ mention.mention_id }}" {% if mention.corrected %}class="corrected" {% endif %} name="{{ mention|get_polarity }}">
+        <td>{{ mention.mention_id }}</td>
+        <td>{{ mention|mark_keywords|safe }}</td>
+        <td>
+            <input value="P" type="checkbox" onclick="table_click(this);" {% if mention|get_polarity == 'P' %}checked {% endif %}> {% trans "P" %}
+            <input value="N" type="checkbox" onclick="table_click(this);" {% if mention|get_polarity == 'N' %}checked {% endif %}> {% trans "N" %}
+            <input value="NEU" type="checkbox" onclick="table_click(this);" {% if mention|get_polarity == 'NEU' %}checked {% endif %}> {% trans "Neu" %} <strong>[{{ mention.polarity }}]</strong>
+        </td>
+        <td>{{ mention.date|clean_date }}</td>
+        <td><img src="{{ STATIC_URL }}img/{{ mention.source.type }}.jpg"></td>
+        <td>{{ mention.lang }}</td>
+        <td><img src="{{ STATIC_URL }}img/remove.png" onclick="delete_mention({{ mention.mention_id }})"></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <script src="{{ STATIC_URL }}js/jquery.dataTables.min.js"></script>
+    <script src="{{ STATIC_URL }}js/dataTables.tableTools.js"></script>
+    <script>
+        $("table input").click(function(){
+            if ($(this).prop( "checked" )){
+                
+                update_polarity($(this));
+                
+            }
+            else{
+                $(this).prop( "checked", true );
+            }
+        });
+        $.fn.dataTableExt.pager.numbers_length = 40;
+        $('table').DataTable({iDisplayLength: 100,extPagination: {
+            numbers_length: 600
+          }});
+    </script>
+</table>
+
