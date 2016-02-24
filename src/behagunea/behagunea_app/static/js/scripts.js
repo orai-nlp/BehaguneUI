@@ -998,7 +998,7 @@ function reload_with_filters() {
     }
     $('#row_2').html(new_row);
     $('#pieChart svg').remove();
-    show_pie('pieChart', $('#pieChart').width(), $('#pieChartSmall').width() / 1.7);
+    show_pie('pieChart', $('#pieChart').width(), $('#pieChart').width() / 1.7);
     $('.aipamen_kopurua').html($(data) [20].innerHTML);
     $('.positibo_kopurua').html($(data) [16].innerHTML);
     $('.negatibo_kopurua').html($(data) [18].innerHTML);
@@ -1022,8 +1022,8 @@ function reload_with_filters() {
     });
     time_negatiboak_list_max = $(data) [32].innerHTML;
     $('#timeChart svg').remove();
-    $('#timeChart').html('<svg class="visualisation"></div>');
-    show_chart('timeChart', $('#timeChart').width() * 1.1, $('#timeChart').width() * 1.2);
+    $('#timeChart').html('<svg class="visualisation" style="width: 90%;height: 200px;"></svg>');
+    show_chart('timeChart', $('#timeChart').width() * 1.2, $('#timeChart').width() /2);
     $('#tweets div h3 span').text('(' + information_tag + ')');
     
     eval($(data) [34].innerHTML);
