@@ -394,7 +394,7 @@ display: none;
 
 .m_infl_press {
     /*float:left;*/   
-    background: transparent url("../images/pgrank_logo.png") no-repeat 0% 50%;
+    background: transparent url("../images/ahrefs-logo.png") no-repeat 0% 50%;
     background-size: 16px 16px;
 }
 .m_infl_Moodmap {
@@ -833,7 +833,7 @@ div.modal#modal_tweets .mention{
 
 #modal_tweets .m_infl_press {
     /*float:left;*/   
-    background: transparent url("../images/pgrank_logo.png") no-repeat 25% 50%;
+    background: transparent url("../images/ahrefs-logo.png") no-repeat 25% 50%;
     background-size: 16px 16px;
     width: 5%;
     text-align:center;

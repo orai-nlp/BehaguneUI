@@ -2,7 +2,7 @@ function show_all_tweets(type) {
   $('#loading_modal').modal('show');
   $.ajax({
     method: 'GET',
-    url: '/behagunea/reload_tweets',
+    url: '/reload_tweets',
     dataType: 'html',
     data: {
       category: $('#id_category').val(),
@@ -34,7 +34,7 @@ function show_all_tweets_pagination(type, page) {
   $('#loading_modal').modal('show');
   $.ajax({
     method: 'GET',
-    url: '/behagunea/reload_tweets',
+    url: '/reload_tweets',
     dataType: 'html',
     data: {
       category: $('#id_category').val(),
@@ -760,7 +760,7 @@ function stats_page_filters(){
   $("#id_category").change(function(){
   $.ajax({
     method: 'GET',
-    url: '/behagunea/reload_projects_filter',
+    url: '/reload_projects_filter',
     dataType: 'html',
     data: {
       category: $(this).val()
@@ -966,7 +966,7 @@ function reload_with_filters() {
   //$("#id_category").val(category);
   $.ajax({
     method: 'GET',
-    url: '/behagunea/reload_page',
+    url: '/reload_page',
     dataType: 'html',
     data: {
       category: $('#id_category').val(),
@@ -1036,7 +1036,7 @@ function reload_with_filters_stats() {
   $('#loading_modal').modal('show');
   $.ajax({
     method: 'GET',
-    url: '/behagunea/reload_page_stats/',
+    url: '/reload_page_stats/',
     dataType: 'html',
     data: {
       date_b: $('#id_date_b').val(),
@@ -1109,7 +1109,7 @@ function reload_from_manage_mentions_button(category) {
   $('#loading_modal').modal('show');
   $.ajax({
     method: 'GET',
-    url: '/behagunea/reload_manage_mentions_page',
+    url: '/reload_manage_mentions_page',
     dataType: 'html',
     data: {
       category: category
@@ -1152,7 +1152,7 @@ function table_click(input) {
 function update_polarity(check) {
   $.ajax({
     method: 'GET',
-    url: '/behagunea/update_polarity',
+    url: '/update_polarity',
     dataType: 'html',
     data: {
       polarity: $(check).val(),
@@ -1170,7 +1170,7 @@ function load_keyword_form(id) {
   // load from AJAX
   $.ajax({
     method: 'GET',
-    url: '/behagunea/keyword_form',
+    url: '/keyword_form',
     dataType: 'html',
     data: {
       id: id
@@ -1192,7 +1192,7 @@ function delete_mention(id) {
   if (response) {
     $.ajax({
       method: 'GET',
-      url: '/behagunea/delete_mention',
+      url: '/delete_mention',
       dataType: 'html',
       data: {
         id: id

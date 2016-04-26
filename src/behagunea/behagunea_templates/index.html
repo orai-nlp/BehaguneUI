@@ -376,13 +376,13 @@
                 $("#mention-modal").modal('show');
             {% endif %}
             {% for i in denak %}
-            $( "#text_{{ i.mention_id }} .source_name" ).tooltipster({content:$('<div><img style="width:30px" src="{{ STATIC_URL }}images/{% if i.source.type == "Twitter" %}klout-logo_transp.png{% endif %}{% if i.source.type == "press" %}pgrank_logo.png{% endif %}"> {{ i.source.influence|round }}</div>')});
+            $( "#text_{{ i.mention_id }} .source_name" ).tooltipster({content:$('<div><img style="width:30px" src="{{ STATIC_URL }}images/{% if i.source.type == "Twitter" %}klout-logo_transp.png{% endif %}{% if i.source.type == "press" %}ahrefs-logo.png{% endif %}"> {{ i.source.influence|round }}</div>')});
             {% endfor %}
             {% for i in positiboak %}
-            $( "#text_{{ i.mention_id }} .source_name" ).tooltipster({content:$('<div><img style="width:30px" src="{{ STATIC_URL }}images/{% if i.source.type == "Twitter" %}klout-logo_transp.png{% endif %}{% if i.source.type == "press" %}pgrank_logo.png{% endif %}"> {{ i.source.influence|round }}</div>')});
+            $( "#text_{{ i.mention_id }} .source_name" ).tooltipster({content:$('<div><img style="width:30px" src="{{ STATIC_URL }}images/{% if i.source.type == "Twitter" %}klout-logo_transp.png{% endif %}{% if i.source.type == "press" %}ahrefs-logo.png{% endif %}"> {{ i.source.influence|round }}</div>')});
             {% endfor %}
             {% for i in negatiboak %}
-            $( "#text_{{ i.mention_id }} .source_name" ).tooltipster({content:$('<div><img style="width:30px" src="{{ STATIC_URL }}images/{% if i.source.type == "Twitter" %}klout-logo_transp.png{% endif %}{% if i.source.type == "press" %}pgrank_logo.png{% endif %}"> {{ i.source.influence|round }}</div>')});
+            $( "#text_{{ i.mention_id }} .source_name" ).tooltipster({content:$('<div><img style="width:30px" src="{{ STATIC_URL }}images/{% if i.source.type == "Twitter" %}klout-logo_transp.png{% endif %}{% if i.source.type == "press" %}ahrefs-logo.png{% endif %}"> {{ i.source.influence|round }}</div>')});
             {% endfor %}
             
             var lainoa='{{ lainoa|safe }}';
