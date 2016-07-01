@@ -52,7 +52,7 @@
                             </li>
                             {% else %}
                             <li>
-                                <form name="setLang{{ key }}" action="/i18n/setlang/" method="POST">{% csrf_token %}
+                                <form name="setLang{{ key }}" action="http://behagunea.dss2016.eu/i18n/setlang/" method="POST">{% csrf_token %}
                                     <input name="next" type="hidden" value="#" />
                                     <input type="hidden" name="language" value="{{ key }}" />
                                 </form>
@@ -66,19 +66,19 @@
             </div>
         </div>
         <div class="mobile">
-            <h2><a href="/">Behagunea</a></h2>
+            <h2><a href="http://behagunea.dss2016.eu/">Behagunea</a></h2>
         </div>
         <ul class="profile_menu">
             {% if user.is_authenticated %}
-            <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
-            <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
-            <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/logout/">{% trans "Atera" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
             <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
             <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
             {% else %}
             <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
             <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
             {% endif %}
         </ul>
@@ -96,24 +96,27 @@
                         <!-- Button Menu Mobile END -->
                         <ul class="nav menu nav-pills menuorokorra BuruMenua collapse ">
                             <li class="parent ez_mobile">
-                                <h2><a href="/">Behagunea</a></h2>
+                                <h2><a href="http://behagunea.dss2016.eu/">Behagunea</a></h2>
                             </li>
                             {% if user.is_authenticated %}
                                 <li class="parent ez_mobile" style="border-left-style: none;">
-                                    <a href="/export" id="export" class="btn">{% trans "Esportatu datuak" %}</a>
+                                    <a href="http://behagunea.dss2016.eu/export" id="export" class="btn">{% trans "Esportatu datuak" %}</a>
                                 </li>
+				<li class="parent ez_mobile" style="border-left-style: none;">
+				    <a id="export_stats" onclick="get_filter_parameters();" href="http://behagunea.dss2016.eu/export_stats" id="export" class="btn">{% trans "Esportatu estatistikak" %}</a>
+				</li>
                             {% endif %}
                             <ul class="mobile">
                                 {% if user.is_authenticated %}
-                                <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
-                                <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
-                                <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/logout/">{% trans "Atera" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
                                 <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
                                 <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
                                 {% else %}
                                 <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
                                 <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
                                 {% endif %}
                             </ul>
@@ -144,7 +147,7 @@
                 </div>
                 <div id="row_1">
                     <div id="timeChart" class="post-preview">
-                        <svg class="visualisation" style="width:90%;height:300px;"></svg>
+                        <svg class="visualisation" style="width:97%;height:300px;"></svg>
                     </div>
                     <div class="percent_30">
                     </div>
@@ -200,7 +203,6 @@
                     </div>
                 </div>
             </div>
-            {% if user.is_authenticated %}
                 <div class="top_twitter_stat" class="row">
                     <div class="top_twitter_stat" class="row">
                         <div class="percent_100 underlined">
@@ -228,7 +230,6 @@
                         </div>
                     </div>
                 </div>
-            {% endif %}
         </div>
         <hr>
         <div id="loading_modal" class="modal text-center" style="display:none;">
@@ -319,8 +320,8 @@
             stats_page_filters();
             var day_names = ['{% trans "Sun" %}','{% trans "Mon" %}','{% trans "Tue" %}','{% trans "Wed" %}','{% trans "Thu" %}','{% trans "Fri" %}','{% trans "Sat" %}'];
             var month_names = [ '{% trans "January" %}', '{% trans "February" %}', '{% trans "March" %}', '{% trans "April" %}', '{% trans "May" %}', '{% trans "June" %}', '{% trans "July" %}', '{% trans "August" %}', '{% trans "September" %}', '{% trans "October" %}', '{% trans "November" %}', '{% trans "December" %}' ];
-            $("#id_date_b").datepicker({dayNamesMin: day_names,monthNames:month_names, firstDay: 1});
-            $("#id_date_e").datepicker({dayNamesMin: day_names,monthNames:month_names, firstDay: 1});
+            $("#id_date_b").datepicker({dayNamesMin: day_names,monthNames:month_names, firstDay: 1,dateFormat: 'yy-mm-dd'});
+            $("#id_date_e").datepicker({dayNamesMin: day_names,monthNames:month_names, firstDay: 1,dateFormat: 'yy-mm-dd'});
             
             
         </script> 

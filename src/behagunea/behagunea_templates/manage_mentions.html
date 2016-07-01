@@ -50,7 +50,7 @@
                             </li>
                             {% else %}
                             <li>
-                                <form name="setLang{{ key }}" action="/i18n/setlang/" method="POST">{% csrf_token %}
+                                <form name="setLang{{ key }}" action="http://behagunea.dss2016.eu/i18n/setlang/" method="POST">{% csrf_token %}
                                     <input name="next" type="hidden" value="#" />
                                     <input type="hidden" name="language" value="{{ key }}" />
                                 </form>
@@ -64,19 +64,19 @@
             </div>
         </div>
         <div class="mobile">
-            <h2><a href="/">Behagunea</a></h2>
+            <h2><a href="http://behagunea.dss2016.eu/">Behagunea</a></h2>
         </div>
         <ul class="profile_menu">
             {% if user.is_authenticated %}
-            <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
-            <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
-            <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/logout/">{% trans "Atera" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
             <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
             <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
             {% else %}
             <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
             <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
             {% endif %}
         </ul>
@@ -94,41 +94,42 @@
                         <!-- Button Menu Mobile END -->
                         <ul class="nav menu nav-pills menuorokorra BuruMenua collapse ">
                             <li class="parent ez_mobile">
-                                <h2>Behagunea</h2>
+                                <h2><a href="http://behagunea.dss2016.eu/">Behagunea</a></h2>
                             </li>
                             <ul class="mobile">
                                 {% if user.is_authenticated %}
-                                <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
-                                <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
-                                <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/logout/">{% trans "Atera" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
                                 <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
                                 <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
                                 {% else %}
                                 <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
                                 <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
                                 {% endif %}
                             </ul>
+			
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success" name="{% trans 'Zuzendu gabeak' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'ez_zuzendu' and category != '' %} active{% endif %}" name="{% trans 'Zuzendu gabeak' %}">
                                 <input type="radio" name="table_options" id="ez_zuzendu1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "Zuzendu gabeak" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger active">
-                                <input type="radio" name="table_options" id="ez_zuzendu1" autocomplete="off" class="kendu">
+                                <label class="btn btn-lg btn-danger {% if category == 'ez_zuzendu' and category == '' %} active{% endif %}">
+                                <input type="radio" name="table_options" id="ez_zuzendu2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "Zuzendu gabeak" %}
                                 </label>          
                             </div>
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'Zuzenduak' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'zuzenduak' %}active{% endif %}" name="{% trans 'Zuzenduak' %}">
                                 <input type="radio" name="table_options" id="zuzenduak1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "Zuzenduak" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'zuzenduak' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="zuzenduak2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "Zuzenduak" %}
                                 </label>          
@@ -136,11 +137,11 @@
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'Positiboak' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'positiboak' %}active{% endif %}" name="{% trans 'Positiboak' %}">
                                 <input type="radio" name="table_options" id="positiboak1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "Positiboak" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'positiboak' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="positiboak2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "Positiboak" %}
                                 </label>          
@@ -148,11 +149,11 @@
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'Negatiboak' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'negatiboak' %}active{% endif %}" name="{% trans 'Negatiboak' %}">
                                 <input type="radio" name="table_options" id="negatiboak1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "Negatiboak" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'negatiboak' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="negatiboak2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "Negatiboak" %}
                                 </label>          
@@ -160,11 +161,11 @@
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'Neutroak' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'neutroak' %}active{% endif %}" name="{% trans 'Neutroak' %}">
                                 <input type="radio" name="table_options" id="neutroak1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "Neutroak" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'neutroak' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="neutroak2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "Neutroak" %}
                                 </label>          
@@ -172,11 +173,11 @@
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'Twitter' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'twitter' %}active{% endif %}" name="{% trans 'Twitter' %}">
                                 <input type="radio" name="table_options" id="twitter1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "Twitter" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'twitter' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="twitter2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "Twitter" %}
                                 </label>          
@@ -184,11 +185,11 @@
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'Prentsa' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'prentsa' %}active{% endif %}" name="{% trans 'Prentsa' %}">
                                 <input type="radio" name="table_options" id="prentsa1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "Prentsa" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'prentsa' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="prentsa2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "Prentsa" %}
                                 </label>          
@@ -196,11 +197,11 @@
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'EU' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'eu' %}active{% endif %}" name="{% trans 'EU' %}">
                                 <input type="radio" name="table_options" id="eu1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "EU" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'eu' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="eu2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "EU" %}
                                 </label>          
@@ -208,11 +209,11 @@
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'ES' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'es' %}active{% endif %}" name="{% trans 'ES' %}">
                                 <input type="radio" name="table_options" id="es1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "ES" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'es' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="es2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "ES" %}
                                 </label>          
@@ -220,11 +221,11 @@
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'EN' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'en' %}active{% endif %}" name="{% trans 'EN' %}">
                                 <input type="radio" name="table_options" id="en1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "EN" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'en' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="en2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "EN" %}
                                 </label>          
@@ -232,11 +233,11 @@
                         </li>
                         <li class="parent" style="border-left-style: none;">
                             <div class="botoiak" data-toggle="buttons">
-                                <label class="btn btn-lg btn-success active" name="{% trans 'FR' %}">
+                                <label class="btn btn-lg btn-success {% if category != 'fr' %}active{% endif %}" name="{% trans 'FR' %}">
                                 <input type="radio" name="table_options" id="fr1" autocomplete="off" checked class="jarri">
                                 <i class="fa fa-check"></i> {% trans "FR" %}
                                 </label>
-                                <label class="btn btn-lg btn-danger">
+                                <label class="btn btn-lg btn-danger {% if category == 'fr' %}active{% endif %}">
                                 <input type="radio" name="table_options" id="fr2" autocomplete="off" class="kendu">
                                 <i class="fa fa-times"></i> {% trans "FR" %}
                                 </label>          
@@ -280,6 +281,18 @@
         </tbody>
         </table>
         </div>
+	<div class="pagination">
+    <span class="step-links">
+	{% for page in mentions.paginator.page_range %}
+    		{% if forloop.counter != 1 %} | {% endif %}
+		{% if mentions.number == page %}
+    			<a href="#" class="current_page">{{ page }}</a>
+		{% else %}
+			<a href="?page={{ page }}&category={{ category }}">{{ page }}</a>
+		{% endif %}
+	{% endfor %}
+    </span>
+</div>
         <hr>
         <div id="loading_modal" class="modal text-center" style="display:none;"><h1>{% trans "Datuak eguneratzen..." %}</h1><img src="{{ STATIC_URL}}img/ajax-loader.gif"/></div>
         <!-- jQuery -->
@@ -295,7 +308,7 @@
         <script src="{{ STATIC_URL }}js/clean-blog.js"></script>
         <script>
             $.fn.dataTableExt.pager.numbers_length = 40;
-            $('table').DataTable({iDisplayLength: 100,extPagination: {
+            $('table').DataTable({bFilter: false, bInfo: false, bPaginate: false,iDisplayLength: 100,extPagination: {
             numbers_length: 600
             }});
             var source_lainoa='{}';

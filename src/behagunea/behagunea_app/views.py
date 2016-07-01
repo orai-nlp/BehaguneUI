@@ -17,6 +17,7 @@ import itertools
 from django.contrib.auth import authenticate
 from django.contrib.auth.decorators import login_required
 import datetime
+import csv
 
 
 ########################
@@ -37,8 +38,10 @@ def get_month_range():
 def get_data_range(date_b,date_e):
     """Get day range between date_b and date_e"""
     dates = Mention.objects.aggregate(Min('date'),Max('date'))
-    begin = datetime.datetime.strptime(dates.get("date__min").split('+')[0], "%Y-%m-%d %H:%M:%S ")
-    end = datetime.datetime.strptime(dates.get("date__max").split('+')[0], "%Y-%m-%d %H:%M:%S ")
+    print "DEBUG: ",date_b,date_e,"|"+dates.get("date__min").split('+')[0]+"|","|"+dates.get("date__max").split('+')[0]+"|"
+    
+    begin = datetime.datetime.strptime(dates.get("date__min").split('+')[0].strip(), "%Y-%m-%d %H:%M:%S")
+    end = datetime.datetime.strptime(dates.get("date__max").split('+')[0].strip(), "%Y-%m-%d %H:%M:%S")
 
     if date_b!= "" and date_e != "":
         begin = datetime.datetime.strptime(date_b+' 0:0:0.0', "%Y-%m-%d %H:%M:%S.%f")
@@ -205,18 +208,365 @@ def reload_manage_mentions_page(request):
 @login_required
 def export(request):
     """Export mentions from DB"""
-    import csv
     mention_keywords = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"))
     
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="'+_('export')+'.csv"'
 
     writer = csv.writer(response)
-    writer.writerow([_("id"),_("date"),_("url"),_("text"),_("text"),_("polarity"),_("favourites"),_("retweets"),_("source type"),_("source influence"),_("source name"),_("keyword type"),_("keyword lang"),_("category"),_("keyword subcategory"),_("keyword term"),_("keyword anchor"),_("keyword is anchor"),_("keyword screen tag")])
+    writer.writerow([_("id"),_("date"),_("url"),_("text"),_("lang"),_("polarity"),_("favourites"),_("retweets"),_("source type"),_("source influence"),_("source name"),_("keyword type"),_("keyword lang"),_("category"),_("keyword subcategory"),_("keyword term"),_("keyword anchor"),_("keyword is anchor"),_("keyword screen tag")])
     for i in mention_keywords:
         writer.writerow([i.mention.mention_id,i.mention.date,i.mention.url.encode("utf-8"),i.mention.text.encode("utf-8"),i.mention.lang,i.mention.manual_polarity,i.mention.favourites,i.mention.retweets,i.mention.source.type,i.mention.source.influence,i.mention.source.source_name.encode("utf-8"),i.keyword.type,i.keyword.lang,i.keyword.category.encode("utf-8"),i.keyword.subCat.encode("utf-8"),i.keyword.term.encode("utf-8"),i.keyword.anchor,i.keyword.is_anchor,i.keyword.screen_tag.encode("utf-8")])
 
     return response
+
+
+@login_required
+def export_stats(request):
+    """Export the information that is showed in stats template"""
+    date_b = request.GET.get("date_b","")
+    date_e = request.GET.get("date_e","")
+    if date_b != "":
+        date_b = date_b.split('-')[0]+'-'+date_b.split('-')[1]+'-'+date_b.split('-')[2]
+        print date_b
+    if date_e != "":
+        date_e = date_e.split('-')[0]+'-'+date_e.split('-')[1]+'-'+date_e.split('-')[2]
+    project = request.GET.get("project","")
+    category = request.GET.get("category","")
+    
+    if date_b != "":    
+        if date_e != "":
+            if project != "":
+                if category != "": # date_b + date_e + category + project
+                    query = Q(keyword__screen_tag = project, keyword__category = category, mention__date__gt=date_b, mention__date__lt=date_e)
+ 
+                else: # date_b + date_e + project
+                    query = Q(keyword__screen_tag = project, mention__date__gt=date_b, mention__date__lt=date_e) 
+            else:
+                if category != "": # date_b + date_e + category
+                    query = Q(keyword__category = category, mention__date__gt=date_b, mention__date__lt=date_e) 
+                else: # date_b + date_e
+                    query = Q(mention__date__gt=date_b, mention__date__lt=date_e) 
+        elif project != "": 
+            if category != "": # date_b + project + category
+                query = Q(keyword__screen_tag = project, keyword__category = category, mention__date__gt=date_b) 
+            else: # date_b + project
+                query = Q(keyword__screen_tag = project, mention__date__gt=date_b) 
+        elif category != "": # date_b + category
+            query = Q(keyword__category = category, mention__date__gt=date_b) 
+        else: # date_b
+            query = Q(mention__date__gt=date_b) 
+    elif date_e != "":
+        if project != "":
+            if category != "": # date_e + category + project
+                query = Q(keyword__screen_tag = project, keyword__category = category, mention__date__lt=date_e) 
+            else: # date_e + project
+                query = Q(keyword__screen_tag = project, mention__date__lt=date_e) 
+        elif category != "": # date_e + category
+            query = Q(keyword__category = category, mention__date__lt=date_e) 
+        else: # date_e
+            query = Q(mention__date__lt=date_e) 
+    elif project != "":
+        if category != "": #project + category
+            query = Q(keyword__screen_tag = project, keyword__category = category) 
+        else: # project
+            query = Q(keyword__screen_tag = project) 
+    elif category != "": # category
+        query = Q(keyword__category = category) 
+    
+    else: # ALL
+        query = Q()
+
+    
+    ### Progression ###
+    
+    neutroak_chart = map(lambda x: x.mention,Keyword_Mention.objects.filter(query,mention__manual_polarity='NEU'))
+    positiboak_chart = map(lambda x: x.mention,Keyword_Mention.objects.filter(query,mention__manual_polarity='P'))
+    negatiboak_chart = map(lambda x: x.mention,Keyword_Mention.objects.filter(query,mention__manual_polarity='N'))
+
+    time_neutroak = {}
+    time_positiboak = {}
+    time_negatiboak = {}
+    
+    for i in get_data_range(date_b,date_e):
+        time_neutroak[i]=0
+        time_positiboak[i]=0
+        time_negatiboak[i]=0
+    
+    
+        
+     
+    time_neutroak_list_max = 0
+    for i in neutroak_chart:
+        if transform_date_to_chart(i.date) in time_neutroak.keys():
+            time_neutroak[transform_date_to_chart(i.date)]+=1
+        else:
+            time_neutroak[transform_date_to_chart(i.date)]=1
+        if time_neutroak[transform_date_to_chart(i.date)] > time_neutroak_list_max:
+            time_neutroak_list_max = time_neutroak[transform_date_to_chart(i.date)]
+    time_neutroak_list = []
+    for i in sorted(time_neutroak.keys()):
+        time_neutroak_list+=[{"date":str(transform_date_to_chart(i)),"count":str(time_neutroak[i])}]
+        
+    
+
+    time_positiboak_list_max = 0
+    for i in positiboak_chart:
+        if transform_date_to_chart(i.date) in time_positiboak.keys():
+            time_positiboak[transform_date_to_chart(i.date)]+=1
+        else:
+            time_positiboak[transform_date_to_chart(i.date)]=1
+        if time_positiboak[transform_date_to_chart(i.date)] > time_positiboak_list_max:
+            time_positiboak_list_max = time_positiboak[transform_date_to_chart(i.date)]
+    time_positiboak_list = []
+    for i in sorted(time_positiboak.keys()):
+        time_positiboak_list+=[{"date":str(transform_date_to_chart(i)),"count":str(time_positiboak[i])}]
+
+    time_negatiboak_list_max = 0
+    for i in negatiboak_chart:
+        if transform_date_to_chart(i.date) in time_negatiboak.keys():
+            time_negatiboak[transform_date_to_chart(i.date)]+=1
+        else:
+            time_negatiboak[transform_date_to_chart(i.date)]=1
+        if time_negatiboak[transform_date_to_chart(i.date)] > time_negatiboak_list_max:
+            time_negatiboak_list_max = time_negatiboak[transform_date_to_chart(i.date)]
+    time_negatiboak_list = []
+    for i in sorted(time_negatiboak.keys()):
+        time_negatiboak_list+=[{"date":str(transform_date_to_chart(i)),"count":str(time_negatiboak[i])}]
+        
+       
+    ### TOP Keyword #### 
+    
+    tag_cloud = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in=("P","N","NEU")),query).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    top_keyword = []
+    top_keyword_d={}
+    try:
+        tot = reduce(lambda x,y: x+y ,map(lambda z:z.get('dcount'),tag_cloud))
+    except:
+        tot = 0
+    for i in tag_cloud:
+        tag=Keyword.objects.get(keyword_id=i.get('keyword')).screen_tag
+        if tag in top_keyword_d.keys():
+            top_keyword_d[tag]+=i.get('dcount')
+        else:
+            top_keyword_d[tag]=i.get('dcount')
+      
+      
+    top_keyword = sorted(top_keyword_d.items(),key=lambda x:x[1],reverse=True)[:20]    
+    top_keyword_categories = ",".join(map(lambda x: '"'+x[0]+'"',top_keyword))
+    top_keyword_values = map(lambda x: x[1],top_keyword)
+
+    tag_cloud_pos = Keyword_Mention.objects.filter(Q(mention__manual_polarity="P"),query).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    
+    top_keyword_pos = []
+    top_keyword_d={}
+    try:
+        tot = reduce(lambda x,y: x+y ,map(lambda z:z.get('dcount'),tag_cloud))
+    except:
+        tot = 0
+    for i in tag_cloud_pos:
+        tag=Keyword.objects.get(keyword_id=i.get('keyword')).screen_tag
+        if tag in top_keyword_d.keys():
+            top_keyword_d[tag]+=i.get('dcount')
+        else:
+            top_keyword_d[tag]=i.get('dcount')
+      
+      
+    top_keyword_pos = sorted(top_keyword_d.items(),key=lambda x:x[1],reverse=True)[:20]    
+    top_keyword_categories_pos = ",".join(map(lambda x: '"'+x[0]+'"',top_keyword_pos))
+    top_keyword_values_pos = map(lambda x: x[1],top_keyword_pos)
+
+    tag_cloud_neg = Keyword_Mention.objects.filter(Q(mention__manual_polarity="N"),query).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    
+    top_keyword_neg = []
+    top_keyword_d={}
+    try:
+        tot = reduce(lambda x,y: x+y ,map(lambda z:z.get('dcount'),tag_cloud))
+    except:
+        tot = 0
+    for i in tag_cloud_neg:
+        tag=Keyword.objects.get(keyword_id=i.get('keyword')).screen_tag
+        if tag in top_keyword_d.keys():
+            top_keyword_d[tag]+=i.get('dcount')
+        else:
+            top_keyword_d[tag]=i.get('dcount')
+      
+      
+    top_keyword_neg = sorted(top_keyword_d.items(),key=lambda x:x[1],reverse=True)[:20]    
+    top_keyword_categories_neg = ",".join(map(lambda x: '"'+x[0]+'"',top_keyword_neg))
+    top_keyword_values_neg = map(lambda x: x[1],top_keyword_neg)
+
+    
+    ### TOP MEDIA ###
+
+    #mentions = Mention.objects.filter(Q(polarity__in=("P","N","NEU"),source__type="press"),query).values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
+
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in=("P","N","NEU"),mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+
+    top_media = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
+    top_media_categories = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_media))
+    top_media_values = map(lambda x: x.get("dcount"),top_media)
+
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="P",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+
+    top_media_pos = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
+
+    top_media_categories_pos = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_media_pos))
+    top_media_values_pos = map(lambda x: x.get("dcount"),top_media_pos)
+
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="N",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+
+    top_media_neg = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
+    top_media_categories_neg = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_media_neg))
+    top_media_values_neg = map(lambda x: x.get("dcount"),top_media_neg)
+
+    
+    ## TOP Twitter ###
+    
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in=("P","N","NEU"),mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+
+    top_twitter = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
+    top_twitter_categories = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_twitter))
+    top_twitter_values = map(lambda x: x.get("dcount"),top_twitter)
+
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="P",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+
+    top_twitter_pos = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
+    top_twitter_categories_pos = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_twitter_pos))
+    top_twitter_values_pos = map(lambda x: x.get("dcount"),top_twitter_pos)
+
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="N",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+
+    top_twitter_neg = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
+    top_twitter_categories_neg = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_twitter_neg))
+    top_twitter_values_neg = map(lambda x: x.get("dcount"),top_twitter_neg)
+
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="'+_('export')+'.csv"'
+
+    writer = csv.writer(response)
+    
+    datak = map(lambda x: x['date'],time_neutroak_list)
+    balioak_n = map(lambda x: x['count'],time_neutroak_list)
+    balioak_p = map(lambda x: x['count'],time_positiboak_list)
+    balioak_ne = map(lambda x: x['count'],time_negatiboak_list)
+
+
+    writer.writerow(['Filtroak: ','hasiera data: ',date_b,'bukaera data:',date_e,'Itsasargia:',category,'Proiektua:',project])
+   
+    writer.writerow([''])
+
+    writer.writerow(['Progresioa'])
+    writer.writerow([''])
+    writer.writerow(["DATAK"]+datak)
+    writer.writerow(["NEUTROAK"]+balioak_n)
+    writer.writerow(["POSITIBOAK"]+balioak_p)
+    writer.writerow(["NEGATIBOAK"]+balioak_ne)
+
+    print top_keyword
+    for i in range (1,5):
+        writer.writerow([])
+
+    writer.writerow(['TOP Keyword'])
+    writer.writerow([''])
+    writer.writerow(['DENAK','','','','','','','POSITIBOAK','','','','','','','NEGATIBOAK'])
+    writer.writerow([''])
+    keywords_n = map(lambda x: x[0],top_keyword)
+    balioak_n = map(lambda x: x[1],top_keyword)
+    keywords_p = map(lambda x: x[0],top_keyword_pos)
+    balioak_p = map(lambda x: x[1],top_keyword_pos)
+    keywords_ne = map(lambda x: x[0],top_keyword_neg)
+    balioak_ne = map(lambda x: x[1],top_keyword_neg)
+
+    while len(balioak_n)<20:
+        balioak_n+=['']
+        keywords_n+=['']
+    while len(balioak_p)<20:
+        balioak_p+=['']
+        keywords_p+=['']
+    while len(balioak_ne)<20:
+        balioak_ne+=['']
+        keywords_ne+=['']
+
+
+    for i in range (0,len(keywords_n)):
+        writer.writerow([keywords_n[i].encode("utf-8"),balioak_n[i],'','','','','',keywords_p[i].encode("utf-8"),balioak_p[i],'','','','','',keywords_ne[i].encode("utf-8"),balioak_ne[i]])
+
+    
+    for i in range (1,5):
+        writer.writerow([])
+
+
+
+    writer.writerow(['TOP MEDIA'])
+    writer.writerow([''])
+    writer.writerow(['DENAK','','','','','','','POSITIBOAK','','','','','','','NEGATIBOAK'])
+    writer.writerow([''])
+    keywords_n = map(lambda x: x['mention__source__source_name'],top_media)
+    balioak_n = map(lambda x: x['dcount'],top_media)
+    keywords_p = map(lambda x: x['mention__source__source_name'],top_media_pos)
+    balioak_p = map(lambda x: x['dcount'],top_media_pos)
+    keywords_ne = map(lambda x: x['mention__source__source_name'],top_media_neg)
+    balioak_ne = map(lambda x: x['dcount'],top_media_neg)
+
+    while len(balioak_n)<20:
+	balioak_n+=['']
+	keywords_n+=['']
+    while len(balioak_p)<20:
+        balioak_p+=['']
+        keywords_p+=['']
+    while len(balioak_ne)<20:
+        balioak_ne+=['']
+        keywords_ne+=['']
+
+
+
+    for i in range (0,len(keywords_n)):
+        writer.writerow([keywords_n[i].encode("utf-8"),balioak_n[i],'','','','','',keywords_p[i].encode("utf-8"),balioak_p[i],'','','','','',keywords_ne[i].encode("utf-8"),balioak_ne[i]])
+
+
+    for i in range (1,5):
+        writer.writerow([])
+
+
+    writer.writerow(['TOP TWITTER'])
+    writer.writerow([''])
+    writer.writerow(['DENAK','','','','','','','POSITIBOAK','','','','','','','NEGATIBOAK'])
+    writer.writerow([''])
+    keywords_n = map(lambda x: x['mention__source__source_name'],top_twitter)
+    balioak_n = map(lambda x: x['dcount'],top_twitter)
+    keywords_p = map(lambda x: x['mention__source__source_name'],top_twitter_pos)
+    balioak_p = map(lambda x: x['dcount'],top_twitter_pos)
+    keywords_ne = map(lambda x: x['mention__source__source_name'],top_twitter_neg)
+    balioak_ne = map(lambda x: x['dcount'],top_twitter_neg)
+
+
+    while len(balioak_n)<20:
+        balioak_n+=['']
+        keywords+=['']
+    while len(balioak_p)<20:
+        balioak_p+=['']
+        keywords_p+=['']
+    while len(balioak_ne)<20:
+        balioak_ne+=['']
+        keywords_ne+=['']
+
+    for i in range (0,len(keywords_n)):
+        writer.writerow([keywords_n[i].encode("utf-8"),balioak_n[i],'','','','','',keywords_p[i].encode("utf-8"),balioak_p[i],'','','','','',keywords_ne[i].encode("utf-8"),balioak_ne[i]])
+
+
+
+
+
+
+    #    writer.writerow([i.mention.mention_id,i.mention.date,i.mention.url.encode("utf-8"),i.mention.text.encode("utf-8"),i.mention.lang,i.me$
+
+    return response
+
+
+    
+    
 
 
 
@@ -262,9 +612,9 @@ def reload_page(request):
                     information_tag += ' ['+_("Filters")+']: '+_("date")+': '+str(f_date)+', '+_("influence")+': '+str(f_influence) 
             else: 
                 if f_type != '': # date + type
-                    information_tag += ' ['+_("Filters")+']: '+_("date")+': '+str(f_date)
-                else: # date
                     information_tag += ' ['+_("Filters")+']: '+_("date")+': '+str(f_date)+', '+_("type")+': '+str(f_type)
+                else: # date
+                    information_tag += ' ['+_("Filters")+']: '+_("date")+': '+str(f_date)
     elif f_lang != '':
         if f_influence != '': 
             if f_type != '':# lang + influence + type
@@ -287,6 +637,7 @@ def reload_page(request):
     if information_tag == '':
         information_tag = _('Denak')
     
+
     # date manipulation
     if f_date != '':
         now = datetime.datetime.now()      
@@ -302,6 +653,8 @@ def reload_page(request):
             year = str(now_date).split()[0].split('-')[0]
             if int(month) > 1:
                 month = str(int(month)-1)
+		if len(month)==1:
+		    month = '0'+month
             else:
                 month = '12'
                 year = str(int(year)-1)
@@ -329,6 +682,8 @@ def reload_page(request):
         cyear = str(int(cyear)-1)
     cdate = cyear+'-'+cmonth+'-'+cday
 
+    print f_category,f_tag,f_date,f_lang,f_influence,f_type
+
     if f_category != '': # Category
         if f_tag != '': # Category + Tag
             # Tag-a jakinda kategoria ez dago zertan erabili!
@@ -338,9 +693,9 @@ def reload_page(request):
                     if f_influence != '': 
                         if f_type != '': # date + lang + influence + type
                             keywords = Keyword.objects.filter(screen_tag=f_tag)
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
                             
                             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -348,9 +703,9 @@ def reload_page(request):
                             denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                         else: # date + lang + influence
                             keywords = Keyword.objects.filter(screen_tag=f_tag)
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                         
                             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -360,9 +715,9 @@ def reload_page(request):
                     else: 
                         if f_type != '': # date + lang + type
                             keywords = Keyword.objects.filter(screen_tag=f_tag)
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__date__gt=date, mention__source__type=f_type),keywords)))
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__date__gt=date, mention__source__type=f_type),keywords)))
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date, mention__source__type=f_type),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__date__gt=date, mention__source__type=f_type),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__date__gt=date, mention__source__type=f_type),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date, mention__source__type=f_type),keywords)))
                             
                             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -370,9 +725,9 @@ def reload_page(request):
                             denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                         else: # date + lang
                             keywords = Keyword.objects.filter(screen_tag=f_tag)
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                             
                             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -381,9 +736,9 @@ def reload_page(request):
                 elif f_influence != '': 
                     if f_type != '': # date + influence +type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date, mention__source__type=f_type),keywords)))
                             
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -391,20 +746,20 @@ def reload_page(request):
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                     else: # date + influence 
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                             
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
                         neutroak = sorted(map(lambda x: x.mention,mentions_neu),key=lambda x: x.date,reverse=True)
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: 
-                    if f_date != '': # date + type
+                    if f_type != '': # date + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__date__gt=date, mention__source__type=f_type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__date__gt=date, mention__source__type=f_type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__date__gt=date, mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__date__gt=date, mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__date__gt=date, mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__date__gt=date, mention__source__type=f_type),keywords)))
                             
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -412,9 +767,9 @@ def reload_page(request):
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                     else: # date
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__date__gt=date),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__date__gt=date),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__date__gt=date),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__date__gt=date),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__date__gt=date),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__date__gt=date),keywords)))
                             
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -424,9 +779,9 @@ def reload_page(request):
                 if f_influence != '': 
                     if f_type != '': # lang + influence + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
                             
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -434,9 +789,9 @@ def reload_page(request):
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                     else: # lang + influence
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                             
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -445,9 +800,9 @@ def reload_page(request):
                 else: 
                     if f_type != '': # lang + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang), mention__source__type=f_type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang), mention__source__type=f_type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang), mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang), mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang), mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang), mention__source__type=f_type),keywords)))
                             
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -455,9 +810,9 @@ def reload_page(request):
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                     else: # lang
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang)),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang)),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang)),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang)),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang)),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang)),keywords)))
                             
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -466,9 +821,9 @@ def reload_page(request):
             elif f_influence: 
                 if f_type != '': # influence + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence), mention__source__type=f_type),keywords)))
                             
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -476,9 +831,9 @@ def reload_page(request):
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: # influence
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence)),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence)),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence)),keywords)))
                             
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -486,9 +841,9 @@ def reload_page(request):
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
             elif f_type != '': # type
                 keywords = Keyword.objects.filter(screen_tag=f_tag)
-                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P', mention__source__type=f_type),keywords)))
-                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N', mention__source__type=f_type),keywords)))
-                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU', mention__source__type=f_type),keywords)))
+                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P', mention__source__type=f_type),keywords)))
+                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N', mention__source__type=f_type),keywords)))
+                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU', mention__source__type=f_type),keywords)))
                             
                 positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                 negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -496,20 +851,24 @@ def reload_page(request):
                 denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
             else: # # NO FILTERS
                 keywords = Keyword.objects.filter(screen_tag=f_tag)
-                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P'),keywords)))
-                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N'),keywords)))
-                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU'),keywords)))
+                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P'),keywords)))
+                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N'),keywords)))
+                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU'),keywords)))
                         
                 positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                 negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
                 neutroak = sorted(map(lambda x: x.mention,mentions_neu),key=lambda x: x.date,reverse=True)
                 denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
+	    lainoa=[]
             source_d={}
             neutroak_min=[]
             for i in neutroak:
                 if not i.url in source_d.keys():
                     neutroak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    neutroak_min+=[i]
+                    source_d[i.url]+=1
                 if len(neutroak_min)==20:
                     break
                 
@@ -518,7 +877,10 @@ def reload_page(request):
             for i in positiboak:
                 if not i.url in source_d.keys():
                     positiboak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    positiboak_min+=[i]
+                    source_d[i.url]+=1
                 if len(positiboak_min)==20:
                     break   
                        
@@ -527,17 +889,23 @@ def reload_page(request):
             for i in negatiboak:
                 if not i.url in source_d.keys():
                     negatiboak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    negatiboak_min+=[i]
+                    source_d[i.url]+=1
                 if len(negatiboak_min)==20:
                     break  
                         
             source_d={}
             denak_min=[]
-            print "denak:",mentions_neu
+            #print "denak:",mentions_neu
             for i in denak:
                 if not i.url in source_d.keys():
                     denak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    denak_min+=[i]
+                    source_d[i.url]+=1
                 if len(denak_min)==20:
                     break   
                
@@ -591,8 +959,7 @@ def reload_page(request):
             time_negatiboak_list = []
             for i in sorted(time_negatiboak.keys()):
                 time_negatiboak_list+=[{"date":str(transform_date_to_chart(i)),"count":str(time_negatiboak[i])}]
-                
-            return render_to_response('ajax_response.html', {"positiboak":positiboak_min,"negatiboak":negatiboak_min,"neutroak":neutroak_min,"positiboak_c":len(positiboak),"denak_c":len(positiboak)+len(negatiboak)+len(neutroak),"negatiboak_c":len(negatiboak),"neutroak_c":len(neutroak),"denak":denak_min, "information_tag":information_tag,"time_neutroak_list":time_neutroak_list,"time_neutroak_list_max":time_neutroak_list_max, "time_positiboak_list":time_positiboak_list,"time_positiboak_list_max":time_positiboak_list_max,"time_negatiboak_list":time_negatiboak_list,"time_negatiboak_list_max":time_negatiboak_list_max}, context_instance = RequestContext(request))
+	    return render_to_response('ajax_response.html', {"positiboak":positiboak_min,"negatiboak":negatiboak_min,"neutroak":neutroak_min,"positiboak_c":len(positiboak),"denak_c":len(positiboak)+len(negatiboak)+len(neutroak),"negatiboak_c":len(negatiboak),"neutroak_c":len(neutroak),"lainoa":lainoa,"denak":denak_min, "information_tag":information_tag,"time_neutroak_list":time_neutroak_list,"time_neutroak_list_max":time_neutroak_list_max, "time_positiboak_list":time_positiboak_list,"time_positiboak_list_max":time_positiboak_list_max,"time_negatiboak_list":time_negatiboak_list,"time_negatiboak_list_max":time_negatiboak_list_max}, context_instance = RequestContext(request))                
         elif f_source != '': # Category + Source
             if f_date != '': 
                 if f_lang != '': 
@@ -600,9 +967,9 @@ def reload_page(request):
                         if f_type != '': # date + lang + influence + type
                             keywords = Keyword.objects.filter(category=f_category)
                             source = Source.objects.filter(source_name=f_source)
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
                         
                             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -611,9 +978,9 @@ def reload_page(request):
                         else: # date + lang + influence
                             keywords = Keyword.objects.filter(category=f_category)
                             source = Source.objects.filter(source_name=f_source)
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
                         
                             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -624,9 +991,9 @@ def reload_page(request):
                         if f_type != '':# date + lang + type
                             keywords = Keyword.objects.filter(category=f_category)
                             source = Source.objects.filter(source_name=f_source)
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
                         
                             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -635,9 +1002,9 @@ def reload_page(request):
                         else: # date + lang
                             keywords = Keyword.objects.filter(category=f_category)
                             source = Source.objects.filter(source_name=f_source)
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source),keywords)))
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source),keywords)))
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source),keywords)))
                         
                             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -647,9 +1014,9 @@ def reload_page(request):
                     if f_type != '': # date + influence + type
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -658,9 +1025,9 @@ def reload_page(request):
                     else: # date + influence
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -670,9 +1037,9 @@ def reload_page(request):
                     if f_type != '': # date + type
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__date__gt=date,mention__source__in=source, mention__source__type=type),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -681,9 +1048,9 @@ def reload_page(request):
                     else:# date
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__date__gt=date,mention__source__in=source),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__date__gt=date,mention__source__in=source),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__date__gt=date,mention__source__in=source),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__date__gt=date,mention__source__in=source),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__date__gt=date,mention__source__in=source),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__date__gt=date,mention__source__in=source),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -694,9 +1061,9 @@ def reload_page(request):
                     if f_type != '':# lang + influence + type
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -705,9 +1072,9 @@ def reload_page(request):
                     else: # lang + influence
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -717,9 +1084,9 @@ def reload_page(request):
                     if f_type != '':# lang + type
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__in=source, mention__source__type=type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__in=source, mention__source__type=type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__in=source, mention__source__type=type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__in=source, mention__source__type=type),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -728,9 +1095,9 @@ def reload_page(request):
                     else:# lang
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__in=source),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__in=source),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__in=source),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__in=source),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__in=source),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__in=source),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -740,9 +1107,9 @@ def reload_page(request):
                 if f_type != '':# influence + type
                     keywords = Keyword.objects.filter(category=f_category)
                     source = Source.objects.filter(source_name=f_source)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__source__in=source, mention__source__type=type),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -751,9 +1118,9 @@ def reload_page(request):
                 else:# influence
                     keywords = Keyword.objects.filter(category=f_category)
                     source = Source.objects.filter(source_name=f_source)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -762,9 +1129,9 @@ def reload_page(request):
             elif f_type != '':
                 keywords = Keyword.objects.filter(category=f_category)
                 source = Source.objects.filter(source_name=f_source)
-                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__in=source, mention__source__type=type),keywords)))
-                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__in=source, mention__source__type=type),keywords)))
-                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__in=source, mention__source__type=type),keywords)))
+                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__in=source, mention__source__type=type),keywords)))
+                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__in=source, mention__source__type=type),keywords)))
+                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__in=source, mention__source__type=type),keywords)))
                         
                 positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                 negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -773,9 +1140,9 @@ def reload_page(request):
             else: # # NO FILTERS
                 keywords = Keyword.objects.filter(category=f_category)
                 source = Source.objects.filter(source_name=f_source)
-                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__in=source),keywords)))
-                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__in=source),keywords)))
-                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__in=source),keywords)))
+                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__in=source),keywords)))
+                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__in=source),keywords)))
+                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__in=source),keywords)))
                     
                 positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                 negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -788,7 +1155,10 @@ def reload_page(request):
             for i in neutroak:
                 if not i.url in source_d.keys():
                     neutroak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    neutroak_min+=[i]
+                    source_d[i.url]+=1
                 if len(neutroak_min)==20:
                     break
                 
@@ -797,7 +1167,10 @@ def reload_page(request):
             for i in positiboak:
                 if not i.url in source_d.keys():
                     positiboak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    positiboak_min+=[i]
+                    source_d[i.url]+=1
                 if len(positiboak_min)==20:
                     break   
                        
@@ -806,7 +1179,10 @@ def reload_page(request):
             for i in negatiboak:
                 if not i.url in source_d.keys():
                     negatiboak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    negatiboak_min+=[i]
+                    source_d[i.url]+=1
                 if len(negatiboak_min)==20:
                     break  
                         
@@ -815,7 +1191,10 @@ def reload_page(request):
             for i in denak:
                 if not i.url in source_d.keys():
                     denak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    denak_min+=[i]
+                    source_d[i.url]+=1
                 if len(denak_min)==20:
                     break   
             
@@ -882,188 +1261,188 @@ def reload_page(request):
                     if f_influence != '': 
                         if f_type != '':  # date + lang + influence + type                 
                             keywords = Keyword.objects.filter(category=f_category)
-                            tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                            tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                            source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                            source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else:# date + lang + influence   
                             keywords = Keyword.objects.filter(category=f_category)
-                            tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                            tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                            source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                            source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                             
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                             
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                         
                     else: 
                         if f_type != '':# date + lang + type
                             keywords = Keyword.objects.filter(category=f_category)
-                            tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                            tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                            source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                            source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else:# date + lang
                             keywords = Keyword.objects.filter(category=f_category)
-                            tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                            tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                            source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                            source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                             
-                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                             
-                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                 elif f_influence != '': 
                     if f_type != '':# date + influence + type
                         keywords = Keyword.objects.filter(category=f_category)
-                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                     else:# date + influence
                         keywords = Keyword.objects.filter(category=f_category)
-                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                             
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                             
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                 else:
                     if f_type != '': # date + type
                         keywords = Keyword.objects.filter(category=f_category)
-                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__date__gt=date,mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__date__gt=date,mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__date__gt=date,mention__source__type=f_type),keywords)))
                             
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__date__gt=date,mention__source__type=f_type),keywords)))
                             
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__date__gt=date,mention__source__type=f_type),keywords)))
                     else: # date
                         keywords = Keyword.objects.filter(category=f_category)
-                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__date__gt=date).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__date__gt=date).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__date__gt=date),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__date__gt=date),keywords)))
                             
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__date__gt=date),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__date__gt=date),keywords)))
                             
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__date__gt=date),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__date__gt=date),keywords)))
             elif f_lang:
                 if f_influence != '':
                     if f_type != '': # lang + influence + type
                         keywords = Keyword.objects.filter(category=f_category)
-                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                             
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                             
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                     else: # lang + influence
                         keywords = Keyword.objects.filter(category=f_category)
-                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                             
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                             
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                 else:
                     if f_type != '': # lang + type
                         keywords = Keyword.objects.filter(category=f_category)
-                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                             
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                             
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                     else: # lang
                         keywords = Keyword.objects.filter(category=f_category)
-                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang)).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                        source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang)).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang)),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang)),keywords)))
                             
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang)),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang)),keywords)))
                             
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang)),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang)),keywords)))
             elif f_influence: 
                 if f_type != '': # influence + type
                     keywords = Keyword.objects.filter(category=f_category)
-                    tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                    source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                    source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                             
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                             
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                 else: # influence
                     keywords = Keyword.objects.filter(category=f_category)
-                    tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                    source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence)).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                    source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence)).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence)),keywords)))
                             
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence)),keywords)))
                             
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence)),keywords)))
             elif f_type != '': # type
                 keywords = Keyword.objects.filter(category=f_category)
-                tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                             
-                source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU"),mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU"),mention__source__type=f_type).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                             
-                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__type=f_type),keywords)))
+                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__type=f_type),keywords)))
                             
-                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__type=f_type),keywords)))
+                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__type=f_type),keywords)))
                             
-                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__type=f_type),keywords)))
+                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__type=f_type),keywords)))
             else: # # NO FILTERS
                 keywords = Keyword.objects.filter(category=f_category)
-                tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU")).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU")).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
                         
-                source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__polarity__in=("P","N","NEU")).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
+                source_tag_cloud = Keyword_Mention.objects.filter(keyword__category=f_category,mention__manual_polarity__in=("P","N","NEU")).values('mention__source__source_name','mention__source__type').annotate(dcount=Count('mention__source__source_name'))
                         
-                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P'),keywords)))
+                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P'),keywords)))
                         
-                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N'),keywords)))
+                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N'),keywords)))
                         
-                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU'),keywords)))
+                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU'),keywords)))
                 
                 
             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
@@ -1108,7 +1487,10 @@ def reload_page(request):
             for i in neutroak:
                 if not i.url in source_d.keys():
                     neutroak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    neutroak_min+=[i]
+                    source_d[i.url]+=1
                 if len(neutroak_min)==20:
                     break
 
@@ -1117,7 +1499,10 @@ def reload_page(request):
             for i in positiboak:
                 if not i.url in source_d.keys():
                     positiboak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    positiboak_min+=[i]
+                    source_d[i.url]+=1
                 if len(positiboak_min)==20:
                     break   
                    
@@ -1126,7 +1511,10 @@ def reload_page(request):
             for i in negatiboak:
                 if not i.url in source_d.keys():
                     negatiboak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    negatiboak_min+=[i]
+                    source_d[i.url]+=1
                 if len(negatiboak_min)==20:
                     break  
                     
@@ -1135,7 +1523,10 @@ def reload_page(request):
             for i in denak:
                 if not i.url in source_d.keys():
                     denak_min+=[i]
-                    source_d[i.url]=''
+                    source_d[i.url]=1
+		elif source_d[i.url]<3:
+                    denak_min+=[i]
+                    source_d[i.url]+=1
                 if len(denak_min)==20:
                     break   
             neutroak_chart=filter(lambda x: x.date>cdate,neutroak)
@@ -1197,9 +1588,9 @@ def reload_page(request):
                 if f_influence != '':
                     if f_type != '': # date + lang + influence + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1207,9 +1598,9 @@ def reload_page(request):
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                     else: # date + lang + influence
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1219,9 +1610,9 @@ def reload_page(request):
                 else:
                     if f_type != '': # date + lang + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1229,9 +1620,9 @@ def reload_page(request):
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                     else: # date + lang
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
-                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
-                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
-                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                        mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                        mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                        mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                         
                         positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                         negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1241,9 +1632,9 @@ def reload_page(request):
             elif f_influence != '':
                 if f_type != '': # date + influence + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1251,9 +1642,9 @@ def reload_page(request):
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: # date + influence
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1262,9 +1653,9 @@ def reload_page(request):
             else:
                 if f_type != '': # date + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__date__gt=date,mention__source__type=f_type),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__date__gt=date,mention__source__type=f_type),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__date__gt=date,mention__source__type=f_type),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__date__gt=date,mention__source__type=f_type),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__date__gt=date,mention__source__type=f_type),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__date__gt=date,mention__source__type=f_type),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1272,21 +1663,23 @@ def reload_page(request):
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: # date
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__date__gt=date),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__date__gt=date),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__date__gt=date),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__date__gt=date),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__date__gt=date),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__date__gt=date),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
                     neutroak = sorted(map(lambda x: x.mention,mentions_neu),key=lambda x: x.date,reverse=True)
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
+		    print len(positiboak),len(negatiboak),len(denak)
+
         elif f_lang:
             if f_influence != '':
                 if f_type != '': # lang + influence + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1294,9 +1687,9 @@ def reload_page(request):
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: # lang + influence
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1305,9 +1698,9 @@ def reload_page(request):
             else:
                 if f_type != '': # lang + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1315,9 +1708,9 @@ def reload_page(request):
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: # lang
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
-                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__lang=str(f_lang)),keywords)))
-                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__lang=str(f_lang)),keywords)))
-                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__lang=str(f_lang)),keywords)))
+                    mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__lang=str(f_lang)),keywords)))
+                    mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__lang=str(f_lang)),keywords)))
+                    mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__lang=str(f_lang)),keywords)))
                         
                     positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                     negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1326,9 +1719,9 @@ def reload_page(request):
         elif f_influence:
             if f_type != '': # influence + type
                 keywords = Keyword.objects.filter(screen_tag=f_tag)
-                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
-                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
-                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                         
                 positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                 negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1336,9 +1729,9 @@ def reload_page(request):
                 denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
             else: # influence
                 keywords = Keyword.objects.filter(screen_tag=f_tag)
-                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__influence__gt=float(f_influence)),keywords)))
-                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__influence__gt=float(f_influence)),keywords)))
-                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__influence__gt=float(f_influence)),keywords)))
+                mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__influence__gt=float(f_influence)),keywords)))
+                mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__influence__gt=float(f_influence)),keywords)))
+                mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__influence__gt=float(f_influence)),keywords)))
                         
                 positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
                 negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1346,9 +1739,9 @@ def reload_page(request):
                 denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
         elif f_type != '': # type
             keywords = Keyword.objects.filter(screen_tag=f_tag)
-            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P',mention__source__type=f_type),keywords)))
-            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N',mention__source__type=f_type),keywords)))
-            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU',mention__source__type=f_type),keywords)))
+            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P',mention__source__type=f_type),keywords)))
+            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N',mention__source__type=f_type),keywords)))
+            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU',mention__source__type=f_type),keywords)))
                         
             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1356,9 +1749,9 @@ def reload_page(request):
             denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
         else: # # NO FILTERS
             keywords = Keyword.objects.filter(screen_tag=f_tag)
-            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='P'),keywords)))
-            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='N'),keywords)))
-            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity='NEU'),keywords)))
+            mentions_pos = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='P'),keywords)))
+            mentions_neg = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='N'),keywords)))
+            mentions_neu = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity='NEU'),keywords)))
                     
             positiboak = sorted(map(lambda x: x.mention,mentions_pos),key=lambda x: x.date,reverse=True)
             negatiboak = sorted(map(lambda x: x.mention,mentions_neg),key=lambda x: x.date,reverse=True)
@@ -1369,7 +1762,10 @@ def reload_page(request):
         for i in neutroak:
             if not i.url in source_d.keys():
                 neutroak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+		neutroak_min+=[i]
+                source_d[i.url]+=1
             if len(neutroak_min)==20:
                 break
             
@@ -1378,7 +1774,10 @@ def reload_page(request):
         for i in positiboak:
             if not i.url in source_d.keys():
                 positiboak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                positiboak_min+=[i]
+                source_d[i.url]+=1
             if len(positiboak_min)==20:
                 break   
                    
@@ -1387,7 +1786,10 @@ def reload_page(request):
         for i in negatiboak:
             if not i.url in source_d.keys():
                 negatiboak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                negatiboak_min+=[i]
+                source_d[i.url]+=1
             if len(negatiboak_min)==20:
                 break  
                     
@@ -1397,7 +1799,10 @@ def reload_page(request):
         for i in denak:
             if not i.url in source_d.keys():
                 denak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                denak_min+=[i]
+                source_d[i.url]+=1
             if len(denak_min)==20:
                 break   
             
@@ -1451,7 +1856,7 @@ def reload_page(request):
         time_negatiboak_list = []
         for i in sorted(time_negatiboak.keys()):
             time_negatiboak_list+=[{"date":str(transform_date_to_chart(i)),"count":str(time_negatiboak[i])}]
-            
+        print {"positiboak":positiboak_min,"negatiboak":negatiboak_min,"neutroak":neutroak_min,"positiboak_c":len(positiboak),"denak_c":len(positiboak)+len(negatiboak)+len(neutroak),"negatiboak_c":len(negatiboak),"neutroak_c":len(neutroak),"denak":denak_min, "information_tag":information_tag,"time_neutroak_list":time_neutroak_list,"time_neutroak_list_max":time_neutroak_list_max, "time_positiboak_list":time_positiboak_list,"time_positiboak_list_max":time_positiboak_list_max,"time_negatiboak_list":time_negatiboak_list,"time_negatiboak_list_max":time_negatiboak_list_max}  
         return render_to_response('ajax_response.html', {"positiboak":positiboak_min,"negatiboak":negatiboak_min,"neutroak":neutroak_min,"positiboak_c":len(positiboak),"denak_c":len(positiboak)+len(negatiboak)+len(neutroak),"negatiboak_c":len(negatiboak),"neutroak_c":len(neutroak),"denak":denak_min, "information_tag":information_tag,"time_neutroak_list":time_neutroak_list,"time_neutroak_list_max":time_neutroak_list_max, "time_positiboak_list":time_positiboak_list,"time_positiboak_list_max":time_positiboak_list_max,"time_negatiboak_list":time_negatiboak_list,"time_negatiboak_list_max":time_negatiboak_list_max}, context_instance = RequestContext(request))
     elif f_source != '': # source
         if f_date != '': 
@@ -1459,107 +1864,107 @@ def reload_page(request):
                 if f_influence != '':
                     if f_type != '': # date + lang + influence + type
                         source = Source.objects.filter(source_name=f_source)
-                        positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')
-                        negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')      
-                        neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')
+                        positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')
+                        negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')      
+                        neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                     else: # date + lang + influence
                         source = Source.objects.filter(source_name=f_source)
-                        positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
-                        negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')      
-                        neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                        positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                        negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')      
+                        neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
     
                 else:
                     if f_type != '': # date + lang + type 
                         source = Source.objects.filter(source_name=f_source)
-                        positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang),date__gt=date, source__type=f_type).order_by('-date')
-                        negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang),date__gt=date, source__type=f_type).order_by('-date')      
-                        neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang),date__gt=date, source__type=f_type).order_by('-date')
+                        positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang),date__gt=date, source__type=f_type).order_by('-date')
+                        negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang),date__gt=date, source__type=f_type).order_by('-date')      
+                        neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang),date__gt=date, source__type=f_type).order_by('-date')
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                     else: # date + lang 
                         source = Source.objects.filter(source_name=f_source)
-                        positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang),date__gt=date).order_by('-date')
-                        negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang),date__gt=date).order_by('-date')      
-                        neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang),date__gt=date).order_by('-date')
+                        positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang),date__gt=date).order_by('-date')
+                        negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang),date__gt=date).order_by('-date')      
+                        neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang),date__gt=date).order_by('-date')
                         denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
             elif f_influence != '':
                 if f_type != '': # date + influence + type
                     source = Source.objects.filter(source_name=f_source)
-                    positiboak = Mention.objects.filter(polarity='P',source__in=source,source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')
-                    negatiboak = Mention.objects.filter(polarity='N',source__in=source,source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')      
-                    neutroak = Mention.objects.filter(polarity='NEU',source__in=source,source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')
+                    positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')
+                    negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')      
+                    neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,source__influence__gt=float(f_influence),date__gt=date, source__type=f_type).order_by('-date')
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: # date + influence 
                     source = Source.objects.filter(source_name=f_source)
-                    positiboak = Mention.objects.filter(polarity='P',source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
-                    negatiboak = Mention.objects.filter(polarity='N',source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')      
-                    neutroak = Mention.objects.filter(polarity='NEU',source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                    positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                    negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')      
+                    neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
             else:
                 if f_type != '': # date + type
                     source = Source.objects.filter(source_name=f_source)
-                    positiboak = Mention.objects.filter(polarity='P',source__in=source,date__gt=date, source__type=f_type).order_by('-date')
-                    negatiboak = Mention.objects.filter(polarity='N',source__in=source,date__gt=date, source__type=f_type).order_by('-date')      
-                    neutroak = Mention.objects.filter(polarity='NEU',source__in=source,date__gt=date, source__type=f_type).order_by('-date')
+                    positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,date__gt=date, source__type=f_type).order_by('-date')
+                    negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,date__gt=date, source__type=f_type).order_by('-date')      
+                    neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,date__gt=date, source__type=f_type).order_by('-date')
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: # date 
                     source = Source.objects.filter(source_name=f_source)
-                    positiboak = Mention.objects.filter(polarity='P',source__in=source,date__gt=date).order_by('-date')
-                    negatiboak = Mention.objects.filter(polarity='N',source__in=source,date__gt=date).order_by('-date')      
-                    neutroak = Mention.objects.filter(polarity='NEU',source__in=source,date__gt=date).order_by('-date')
+                    positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,date__gt=date).order_by('-date')
+                    negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,date__gt=date).order_by('-date')      
+                    neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,date__gt=date).order_by('-date')
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
         elif f_lang:
             if f_influence != '':
                 if f_type != '': # lang + influence + type
                     source = Source.objects.filter(source_name=f_source)
-                    positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')
-                    negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')      
-                    neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')
+                    positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')
+                    negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')      
+                    neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: # lang + influence
                     source = Source.objects.filter(source_name=f_source)
-                    positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
-                    negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')      
-                    neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                    positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                    negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')      
+                    neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
             else:
                 if f_type != '': # lang + type
                     source = Source.objects.filter(source_name=f_source)
-                    positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')
-                    negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')      
-                    neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')
+                    positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')
+                    negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')      
+                    neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
                 else: # lang 
                     source = Source.objects.filter(source_name=f_source)
-                    positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang)).order_by('-date')
-                    negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang)).order_by('-date')      
-                    neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang)).order_by('-date')
+                    positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang)).order_by('-date')
+                    negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang)).order_by('-date')      
+                    neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang)).order_by('-date')
                     denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
         elif f_influence:
             if f_type != '': # influence + type
                 source = Source.objects.filter(source_name=f_source)
-                positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')
-                negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')      
-                neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')
+                positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')
+                negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')      
+                neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence), source__type=f_type).order_by('-date')
                 denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
             else: # influence 
                 source = Source.objects.filter(source_name=f_source)
-                positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
-                negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')      
-                neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')      
+                neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
                 denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
         elif f_type != '': # type
             source = Source.objects.filter(source_name=f_source)
-            positiboak = Mention.objects.filter(polarity='P',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')
-            negatiboak = Mention.objects.filter(polarity='N',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')      
-            neutroak = Mention.objects.filter(polarity='NEU',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')
+            positiboak = Mention.objects.filter(manual_polarity='P',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')
+            negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')      
+            neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source,lang=str(f_lang), source__type=f_type).order_by('-date')
             denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
         else: # # NO FILTERS
             source = Source.objects.filter(source_name=f_source)
-            positiboak = Mention.objects.filter(polarity='P',source__in=source).order_by('-date')
-            negatiboak = Mention.objects.filter(polarity='N',source__in=source).order_by('-date')      
-            neutroak = Mention.objects.filter(polarity='NEU',source__in=source).order_by('-date')
+            positiboak = Mention.objects.filter(manual_polarity='P',source__in=source).order_by('-date')
+            negatiboak = Mention.objects.filter(manual_polarity='N',source__in=source).order_by('-date')      
+            neutroak = Mention.objects.filter(manual_polarity='NEU',source__in=source).order_by('-date')
             denak = sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
             
         lainoa=[]
@@ -1568,7 +1973,10 @@ def reload_page(request):
         for i in neutroak:
             if not i.url in source_d.keys():
                 neutroak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                neutroak_min+=[i]
+                source_d[i.url]+=1
             if len(neutroak_min)==20:
                 break
             
@@ -1577,7 +1985,10 @@ def reload_page(request):
         for i in positiboak:
             if not i.url in source_d.keys():
                 positiboak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                positiboak_min+=[i]
+                source_d[i.url]+=1
             if len(positiboak_min)==20:
                 break   
                    
@@ -1586,7 +1997,10 @@ def reload_page(request):
         for i in negatiboak:
             if not i.url in source_d.keys():
                 negatiboak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                negatiboak_min+=[i]
+                source_d[i.url]+=1
             if len(negatiboak_min)==20:
                 break  
                     
@@ -1595,7 +2009,10 @@ def reload_page(request):
         for i in denak:
             if not i.url in source_d.keys():
                 denak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                denak_min+=[i]
+                source_d[i.url]+=1
             if len(denak_min)==20:
                 break   
            
@@ -1657,141 +2074,140 @@ def reload_page(request):
             if f_lang != '': 
                 if f_influence != '':
                     if f_type != '': # lang + date + influence + type
-                        neutroak=Mention.objects.filter(polarity='NEU',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
-                        positiboak=Mention.objects.filter(polarity='P',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
-                        negatiboak=Mention.objects.filter(polarity='N',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                        neutroak=Mention.objects.filter(manual_polarity='NEU',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                        positiboak=Mention.objects.filter(manual_polarity='P',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                        negatiboak=Mention.objects.filter(manual_polarity='N',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
                         denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                        tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                        source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                        tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
                     else: # lang + date + influence
-                        neutroak=Mention.objects.filter(polarity='NEU',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
-                        positiboak=Mention.objects.filter(polarity='P',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
-                        negatiboak=Mention.objects.filter(polarity='N',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                        neutroak=Mention.objects.filter(manual_polarity='NEU',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                        positiboak=Mention.objects.filter(manual_polarity='P',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                        negatiboak=Mention.objects.filter(manual_polarity='N',lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
                         denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                        tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                        source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                        tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).values('source__source_name').annotate(dcount=Count('source__source_name'))
                 else:
                     if f_type != '': # lang + date + type
-                        neutroak=Mention.objects.filter(polarity='NEU',lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
-                        positiboak=Mention.objects.filter(polarity='P',lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
-                        negatiboak=Mention.objects.filter(polarity='N',lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
+                        neutroak=Mention.objects.filter(manual_polarity='NEU',lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
+                        positiboak=Mention.objects.filter(manual_polarity='P',lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
+                        negatiboak=Mention.objects.filter(manual_polarity='N',lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
                         denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                        tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                        source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),lang=str(f_lang),date__gt=date,source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                        tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),lang=str(f_lang),date__gt=date,source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
                     else: # lang + date
-                        neutroak=Mention.objects.filter(polarity='NEU',lang=str(f_lang),date__gt=date).order_by('-date')
-                        positiboak=Mention.objects.filter(polarity='P',lang=str(f_lang),date__gt=date).order_by('-date')
-                        negatiboak=Mention.objects.filter(polarity='N',lang=str(f_lang),date__gt=date).order_by('-date')
+                        neutroak=Mention.objects.filter(manual_polarity='NEU',lang=str(f_lang),date__gt=date).order_by('-date')
+                        positiboak=Mention.objects.filter(manual_polarity='P',lang=str(f_lang),date__gt=date).order_by('-date')
+                        negatiboak=Mention.objects.filter(manual_polarity='N',lang=str(f_lang),date__gt=date).order_by('-date')
                         denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                        tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                        source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),lang=str(f_lang),date__gt=date).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                        tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                        source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),lang=str(f_lang),date__gt=date).values('source__source_name').annotate(dcount=Count('source__source_name'))
             elif f_influence != '':
                 if f_type != '': # date + influence + type
-                    neutroak=Mention.objects.filter(polarity='NEU',source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
-                    positiboak=Mention.objects.filter(polarity='P',source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
-                    negatiboak=Mention.objects.filter(polarity='N',source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                    neutroak=Mention.objects.filter(manual_polarity='NEU',source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                    positiboak=Mention.objects.filter(manual_polarity='P',source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                    negatiboak=Mention.objects.filter(manual_polarity='N',source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
                     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                    source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                    tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
                 else: # date + influence
-                    neutroak=Mention.objects.filter(polarity='NEU',source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
-                    positiboak=Mention.objects.filter(polarity='P',source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
-                    negatiboak=Mention.objects.filter(polarity='N',source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                    neutroak=Mention.objects.filter(manual_polarity='NEU',source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                    positiboak=Mention.objects.filter(manual_polarity='P',source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                    negatiboak=Mention.objects.filter(manual_polarity='N',source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
                     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                    source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),source__influence__gt=float(f_influence),date__gt=date).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                    tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),source__influence__gt=float(f_influence),date__gt=date).values('source__source_name').annotate(dcount=Count('source__source_name'))
             else: # date
                 if f_type != '': # date + type
-                    neutroak=Mention.objects.filter(polarity='NEU',date__gt=date,source__type=f_type).order_by('-date')
-                    positiboak=Mention.objects.filter(polarity='P',date__gt=date,source__type=f_type).order_by('-date')
-                    negatiboak=Mention.objects.filter(polarity='N',date__gt=date,source__type=f_type).order_by('-date')
+                    neutroak=Mention.objects.filter(manual_polarity='NEU',date__gt=date,source__type=f_type).order_by('-date')
+                    positiboak=Mention.objects.filter(manual_polarity='P',date__gt=date,source__type=f_type).order_by('-date')
+                    negatiboak=Mention.objects.filter(manual_polarity='N',date__gt=date,source__type=f_type).order_by('-date')
                     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                    source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),date__gt=date,source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                    tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__date__gt=date,mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),date__gt=date,source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
                 else: # date
-                    neutroak=Mention.objects.filter(polarity='NEU',date__gt=date).order_by('-date')
-                    positiboak=Mention.objects.filter(polarity='P',date__gt=date).order_by('-date')
-                    negatiboak=Mention.objects.filter(polarity='N',date__gt=date).order_by('-date')
+                    neutroak=Mention.objects.filter(manual_polarity='NEU',date__gt=date).order_by('-date')
+                    positiboak=Mention.objects.filter(manual_polarity='P',date__gt=date).order_by('-date')
+                    negatiboak=Mention.objects.filter(manual_polarity='N',date__gt=date).order_by('-date')
                     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
-
-                    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                    source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),date__gt=date).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                    tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__date__gt=date).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),date__gt=date).values('source__source_name').annotate(dcount=Count('source__source_name'))
         elif f_lang != '':
             if f_influence != '':
                 if f_type != '': # lang + influence + type
-                    neutroak=Mention.objects.filter(polarity='NEU',lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
-                    positiboak=Mention.objects.filter(polarity='P',lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
-                    negatiboak=Mention.objects.filter(polarity='N',lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                    neutroak=Mention.objects.filter(manual_polarity='NEU',lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                    positiboak=Mention.objects.filter(manual_polarity='P',lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                    negatiboak=Mention.objects.filter(manual_polarity='N',lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
                     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                    source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                    tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
                 else: # lang + influence 
-                    neutroak=Mention.objects.filter(polarity='NEU',lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
-                    positiboak=Mention.objects.filter(polarity='P',lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
-                    negatiboak=Mention.objects.filter(polarity='N',lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                    neutroak=Mention.objects.filter(manual_polarity='NEU',lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                    positiboak=Mention.objects.filter(manual_polarity='P',lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                    negatiboak=Mention.objects.filter(manual_polarity='N',lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
                     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                    source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),lang=str(f_lang),source__influence__gt=float(f_influence)).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                    tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),lang=str(f_lang),source__influence__gt=float(f_influence)).values('source__source_name').annotate(dcount=Count('source__source_name'))
             else:
                 if f_type != '': # lang + type
-                    neutroak=Mention.objects.filter(polarity='NEU',lang=str(f_lang),source__type=f_type).order_by('-date')
-                    positiboak=Mention.objects.filter(polarity='P',lang=str(f_lang),source__type=f_type).order_by('-date')
-                    negatiboak=Mention.objects.filter(polarity='N',lang=str(f_lang),source__type=f_type).order_by('-date')
+                    neutroak=Mention.objects.filter(manual_polarity='NEU',lang=str(f_lang),source__type=f_type).order_by('-date')
+                    positiboak=Mention.objects.filter(manual_polarity='P',lang=str(f_lang),source__type=f_type).order_by('-date')
+                    negatiboak=Mention.objects.filter(manual_polarity='N',lang=str(f_lang),source__type=f_type).order_by('-date')
                     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                    source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),lang=str(f_lang),source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                    tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),lang=str(f_lang),source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
                 else: # lang
-                    neutroak=Mention.objects.filter(polarity='NEU',lang=str(f_lang)).order_by('-date')
-                    positiboak=Mention.objects.filter(polarity='P',lang=str(f_lang)).order_by('-date')
-                    negatiboak=Mention.objects.filter(polarity='N',lang=str(f_lang)).order_by('-date')
+                    neutroak=Mention.objects.filter(manual_polarity='NEU',lang=str(f_lang)).order_by('-date')
+                    positiboak=Mention.objects.filter(manual_polarity='P',lang=str(f_lang)).order_by('-date')
+                    negatiboak=Mention.objects.filter(manual_polarity='N',lang=str(f_lang)).order_by('-date')
                     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__lang=str(f_lang)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                    source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),lang=str(f_lang)).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                    tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__lang=str(f_lang)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                    source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),lang=str(f_lang)).values('source__source_name').annotate(dcount=Count('source__source_name'))
                     
         elif f_influence != '':
             if f_type != '': # influence + type
-                neutroak=Mention.objects.filter(polarity='NEU',source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
-                positiboak=Mention.objects.filter(polarity='P',source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
-                negatiboak=Mention.objects.filter(polarity='N',source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                neutroak=Mention.objects.filter(manual_polarity='NEU',source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                positiboak=Mention.objects.filter(manual_polarity='P',source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                negatiboak=Mention.objects.filter(manual_polarity='N',source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
                 denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),source__influence__gt=float(f_influence),source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),source__influence__gt=float(f_influence),source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
             else: # influence
-                neutroak=Mention.objects.filter(polarity='NEU',source__influence__gt=float(f_influence)).order_by('-date')
-                positiboak=Mention.objects.filter(polarity='P',source__influence__gt=float(f_influence)).order_by('-date')
-                negatiboak=Mention.objects.filter(polarity='N',source__influence__gt=float(f_influence)).order_by('-date')
+                neutroak=Mention.objects.filter(manual_polarity='NEU',source__influence__gt=float(f_influence)).order_by('-date')
+                positiboak=Mention.objects.filter(manual_polarity='P',source__influence__gt=float(f_influence)).order_by('-date')
+                negatiboak=Mention.objects.filter(manual_polarity='N',source__influence__gt=float(f_influence)).order_by('-date')
                 denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-                tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-                source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),source__influence__gt=float(f_influence)).values('source__source_name').annotate(dcount=Count('source__source_name'))
+                tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__source__influence__gt=float(f_influence)).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+                source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),source__influence__gt=float(f_influence)).values('source__source_name').annotate(dcount=Count('source__source_name'))
         elif f_type != '': # type
-            neutroak=Mention.objects.filter(polarity='NEU',source__type=f_type).order_by('-date')
-            positiboak=Mention.objects.filter(polarity='P',source__type=f_type).order_by('-date')
-            negatiboak=Mention.objects.filter(polarity='N',source__type=f_type).order_by('-date')
+            neutroak=Mention.objects.filter(manual_polarity='NEU',source__type=f_type).order_by('-date')
+            positiboak=Mention.objects.filter(manual_polarity='P',source__type=f_type).order_by('-date')
+            negatiboak=Mention.objects.filter(manual_polarity='N',source__type=f_type).order_by('-date')
             denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-            tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU"),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-            source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU"),source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
+            tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"),mention__source__type=f_type).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+            source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU"),source__type=f_type).values('source__source_name').annotate(dcount=Count('source__source_name'))
         else: # all
-            neutroak=Mention.objects.filter(polarity='NEU').order_by('-date')
-            positiboak=Mention.objects.filter(polarity='P').order_by('-date')
-            negatiboak=Mention.objects.filter(polarity='N').order_by('-date')
+            neutroak=Mention.objects.filter(manual_polarity='NEU').order_by('-date')
+            positiboak=Mention.objects.filter(manual_polarity='P').order_by('-date')
+            negatiboak=Mention.objects.filter(manual_polarity='N').order_by('-date')
             denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
 
-            tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU")).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-            source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU")).values('source__source_name').annotate(dcount=Count('source__source_name'))
+            tag_cloud = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU")).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+            source_tag_cloud = Mention.objects.filter(manual_polarity__in=("P","N","NEU")).values('source__source_name').annotate(dcount=Count('source__source_name'))
         
         
         lainoa = []
@@ -1826,7 +2242,10 @@ def reload_page(request):
         for i in neutroak:
             if not i.url in source_d.keys():
                 neutroak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                neutroak_min+=[i]
+                source_d[i.url]+=1
             if len(neutroak_min)==20:
                 break
         
@@ -1835,7 +2254,10 @@ def reload_page(request):
         for i in positiboak:
             if not i.url in source_d.keys():
                 positiboak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                positiboak_min+=[i]
+                source_d[i.url]+=1
             if len(positiboak_min)==20:
                 break   
                
@@ -1844,7 +2266,10 @@ def reload_page(request):
         for i in negatiboak:
             if not i.url in source_d.keys():
                 negatiboak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                negatiboak_min+=[i]
+                source_d[i.url]+=1
             if len(negatiboak_min)==20:
                 break  
                 
@@ -1853,7 +2278,10 @@ def reload_page(request):
         for i in denak:
             if not i.url in source_d.keys():
                 denak_min+=[i]
-                source_d[i.url]=''
+                source_d[i.url]=1
+	    elif source_d[i.url]<3:
+                denak_min+=[i]
+                source_d[i.url]+=1
             if len(denak_min)==20:
                 break   
                
@@ -1907,7 +2335,7 @@ def reload_page(request):
         time_negatiboak_list = []
         for i in sorted(time_negatiboak.keys()):
             time_negatiboak_list+=[{"date":str(transform_date_to_chart(i)),"count":str(time_negatiboak[i])}]       
-               
+	
         return render_to_response('ajax_response.html', {"positiboak":positiboak_min,"negatiboak":negatiboak_min,"neutroak":neutroak_min,"positiboak_c":len(positiboak),"denak_c":len(positiboak)+len(negatiboak)+len(neutroak),"negatiboak_c":len(negatiboak),"neutroak_c":len(neutroak),"lainoa":lainoa,"source_lainoa":source_lainoa,"denak":denak_min, "information_tag":information_tag,"time_neutroak_list":time_neutroak_list,"time_neutroak_list_max":time_neutroak_list_max, "time_positiboak_list":time_positiboak_list,"time_positiboak_list_max":time_positiboak_list_max,"time_negatiboak_list":time_negatiboak_list,"time_negatiboak_list_max":time_negatiboak_list_max}, context_instance = RequestContext(request))
 
 
@@ -1937,111 +2365,111 @@ def reload_tweets(request):
                         if f_type != '': # date + lang + influence + type
                             keywords = Keyword.objects.filter(screen_tag=f_tag)
                             if polarity == 'all':                            
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))                                                 
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))                                                 
                         else: # date + lang + influence
                             keywords = Keyword.objects.filter(screen_tag=f_tag)
                             if polarity == 'all':                            
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                     else:
                         if f_type != '':# date + lang + type
                             keywords = Keyword.objects.filter(screen_tag=f_tag)
                             if polarity == 'all':
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))     
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))     
                         else:# date + lang
                             keywords = Keyword.objects.filter(screen_tag=f_tag)
                             if polarity == 'all':
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date),keywords)))     
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date),keywords)))     
                                      
                 elif f_influence != '':
                     if f_type != '':# date + influence +type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                     else:# date + influence 
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
 
                 else:
                     if f_type != '':# date + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__date__gt=date),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__date__gt=date),keywords)))
                     else:# date
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__date__gt=date,mention__source__type=f_type),keywords)))
                     
             elif f_lang:
                 if f_influence != '': 
                     if f_type != '':# lang + influence + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                     else:# lang + influence
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                     
                 else:
                     if f_type != '':# lang + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                     else:# lang
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang)),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang)),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang)),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang)),keywords)))
                     
             elif f_influence: 
                 if f_type != '':# influence + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                 else:# influence
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence)),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence)),keywords)))
             elif f_type != '': # type
                 keywords = Keyword.objects.filter(screen_tag=f_tag)
                 if polarity == 'all':
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__type=f_type),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__type=f_type),keywords)))
                 else:
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__type=f_type),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__type=f_type),keywords)))
                 
             else: # # NO FILTERS
                 keywords = Keyword.objects.filter(screen_tag=f_tag)
                 if polarity == 'all':
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU')),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU')),keywords)))
                 else:
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity),keywords)))
                 
             if order == 'data':
                 if ord_dir == 'desc':                                
@@ -2068,16 +2496,16 @@ def reload_tweets(request):
                             keywords = Keyword.objects.filter(category=f_category)
                             source = Source.objects.filter(source_name=f_source)
                             if polarity == 'all':
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
                         else:# date + lang + influence
                             keywords = Keyword.objects.filter(category=f_category)
                             source = Source.objects.filter(source_name=f_source)
                             if polarity == 'all':
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
                         
 
                     else:
@@ -2085,7 +2513,7 @@ def reload_tweets(request):
                             keywords = Keyword.objects.filter(category=f_category)
                             source = Source.objects.filter(source_name=f_source)
                             if polarity == 'all':
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
                             else:
                                 mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
                         else:# date + lang
@@ -2094,7 +2522,7 @@ def reload_tweets(request):
                             if polarity == 'all':
                                 mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date,mention__source__in=source),keywords)))
                         
                 elif f_influence != '':
                     if f_type != '':# date + influence +type
@@ -2103,30 +2531,30 @@ def reload_tweets(request):
                         if polarity == 'all':
                             mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
                     else:# date + influence
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__in=source),keywords)))
                     
                 else: # date
                     if f_type != '': # date + type
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__date__gt=date,mention__source__in=source,mention__source__type=f_type),keywords)))
                     else: # date
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__in=source),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__date__gt=date,mention__source__in=source),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__date__gt=date,mention__source__in=source),keywords)))
                     
             elif f_lang:
                 if f_influence != '': 
@@ -2134,63 +2562,63 @@ def reload_tweets(request):
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source,mention__source__type=f_type),keywords)))
                     else:# lang + influence
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
                     
                 else: # lang
                     if f_type != '':# lang + type
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__in=source,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__in=source,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__in=source,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__in=source,mention__source__type=f_type),keywords)))
                     else:# lang
                         keywords = Keyword.objects.filter(category=f_category)
                         source = Source.objects.filter(source_name=f_source)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__in=source),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__in=source),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__in=source),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__in=source),keywords)))
                     
             elif f_influence:
                 if f_type != '': # influence + type
                     keywords = Keyword.objects.filter(category=f_category)
                     source = Source.objects.filter(source_name=f_source)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__in=source,mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__in=source,mention__source__type=f_type),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__in=source,mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__in=source,mention__source__type=f_type),keywords)))
                 else: # influence
                     keywords = Keyword.objects.filter(category=f_category)
                     source = Source.objects.filter(source_name=f_source)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__in=source),keywords)))
             elif f_type != '':
                 keywords = Keyword.objects.filter(category=f_category)
                 source = Source.objects.filter(source_name=f_source)
                 if polarity == 'all':
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__in=source,mention__source__type=f_type),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__in=source,mention__source__type=f_type),keywords)))
                 else:
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__in=source,mention__source__type=f_type),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__in=source,mention__source__type=f_type),keywords)))
                 
             else: # # NO FILTERS
                 keywords = Keyword.objects.filter(category=f_category)
                 source = Source.objects.filter(source_name=f_source)
                 if polarity == 'all':
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__in=source),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__in=source),keywords)))
                 else:
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__in=source),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__in=source),keywords)))
                 
             if order == 'data':
                 if ord_dir == 'desc':                                
@@ -2220,117 +2648,117 @@ def reload_tweets(request):
                         if f_type != '':   # date + lang + influence + type               
                             keywords = Keyword.objects.filter(category=f_category)
                             if polarity == 'all':                         
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else: # date + lang + influence
                             keywords = Keyword.objects.filter(category=f_category)
                             if polarity == 'all':                         
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                         
  
                     else:
                         if f_type != '':  # date + lang + type
                             keywords = Keyword.objects.filter(category=f_category)                        
                             if polarity == 'all':
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else: # date + lang
                             keywords = Keyword.objects.filter(category=f_category)                        
                             if polarity == 'all':
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                             else:
-                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                         
                 elif f_influence != '':
                     if f_type != '': # date + influence + type
                         keywords = Keyword.objects.filter(category=f_category)
                         if polarity == 'all':    
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                     else: # date + influence
                         keywords = Keyword.objects.filter(category=f_category)
                         if polarity == 'all':    
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                                          
                 else:
                     if f_type != '': # date + type
                         keywords = Keyword.objects.filter(category=f_category)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__date__gt=date,mention__source__type=f_type),keywords)))
                     else: # date
                         keywords = Keyword.objects.filter(category=f_category)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__date__gt=date),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__date__gt=date),keywords)))
                     
             elif f_lang:
                 if f_influence != '':
                     if f_type != '': # lang + influence + type
                         keywords = Keyword.objects.filter(category=f_category)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                         else:    
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                     else: # lang + influence
                         keywords = Keyword.objects.filter(category=f_category)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                         else:    
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                         
                   
                 else:
                     if f_type != '': # lang + type
                         keywords = Keyword.objects.filter(category=f_category)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                     else: # lang
                         keywords = Keyword.objects.filter(category=f_category)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang)),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang)),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang)),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang)),keywords)))
                         
                     
             elif f_influence:
                 if f_type != '': # influence + type
                     keywords = Keyword.objects.filter(category=f_category)
                     if polarity == 'all':                        
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                     else:    
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                 else: # influence
                     keywords = Keyword.objects.filter(category=f_category)
                     if polarity == 'all':                        
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence)),keywords)))
                     else:    
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence)),keywords)))
                    
             elif f_type != '':
                 keywords = Keyword.objects.filter(category=f_category)
                 if polarity == 'all':                        
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__type=f_type),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__type=f_type),keywords)))
                 else:    
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__type=f_type),keywords)))   
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__type=f_type),keywords)))   
                 
             else: # # NO FILTERS
                 keywords = Keyword.objects.filter(category=f_category)
                 if polarity == 'all':
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU')),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU')),keywords)))
                 else:        
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity),keywords)))
            
             if order == 'data':
                 if ord_dir == 'desc':                                
@@ -2356,115 +2784,115 @@ def reload_tweets(request):
                     if f_type != '': # date + lang + influence + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                     else: # date + lang + influence
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                     
                     
                 else:
                     if f_type != '': # date + lang + type
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date,mention__source__type=f_type),keywords)))
                     else: # date + lang
                         keywords = Keyword.objects.filter(screen_tag=f_tag)
                         if polarity == 'all':
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                         else:
-                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date),keywords)))
+                            mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__date__gt=date),keywords)))
                     
             elif f_influence != '': 
                 if f_type != '': # date + influence + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date,mention__source__type=f_type),keywords)))
                 else: # date + influence
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__date__gt=date),keywords)))
                 
             else:
                 if f_type != '': # date + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__date__gt=date,mention__source__type=f_type),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__date__gt=date,mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__date__gt=date,mention__source__type=f_type),keywords)))
                 else: # date
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__date__gt=date),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__date__gt=date),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__date__gt=date),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__date__gt=date),keywords)))
                 
         elif f_lang:
             if f_influence != '':
                 if f_type != '': # lang + influence + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                 else: # lang + influence
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__influence__gt=float(f_influence)),keywords)))
                
             else:
                 if f_type != '': # lang + type
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang),mention__source__type=f_type),keywords)))
                 else: # lang
                     keywords = Keyword.objects.filter(screen_tag=f_tag)
                     if polarity == 'all':
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__lang=str(f_lang)),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__lang=str(f_lang)),keywords)))
                     else:
-                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__lang=str(f_lang)),keywords)))
+                        mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__lang=str(f_lang)),keywords)))
                 
         elif f_influence:
             if f_type != '': # influence + type
                 keywords = Keyword.objects.filter(screen_tag=f_tag)
                 if polarity == 'all':
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
                 else:
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence),mention__source__type=f_type),keywords)))
             else: # influence
                 keywords = Keyword.objects.filter(screen_tag=f_tag)
                 if polarity == 'all':
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__influence__gt=float(f_influence)),keywords)))
                 else:
-                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__influence__gt=float(f_influence)),keywords)))
+                    mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__influence__gt=float(f_influence)),keywords)))
                     
         elif f_type != '':
             keywords = Keyword.objects.filter(screen_tag=f_tag)
             if polarity == 'all':
-                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU'),mention__source__type=f_type),keywords)))
+                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU'),mention__source__type=f_type),keywords)))
             else:
-                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity,mention__source__type=f_type),keywords)))
+                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity,mention__source__type=f_type),keywords)))
             
         else: # # NO FILTERS
             keywords = Keyword.objects.filter(screen_tag=f_tag)
             if polarity == 'all':
-                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity__in=('P','N','NEU')),keywords)))
+                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity__in=('P','N','NEU')),keywords)))
             else:
-                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__polarity=polarity),keywords)))
+                mentions = list(itertools.chain(*map(lambda x: x.keyword_mention_set.filter(mention__manual_polarity=polarity),keywords)))
             
         if order == 'data':
             if ord_dir == 'desc':                                
@@ -2478,9 +2906,9 @@ def reload_tweets(request):
                 mentions2 = sorted(map(lambda x: x.mention,mentions),key=lambda x: x.source.influence,reverse=False)
         elif order == 'polarity':
             if ord_dir == 'desc':
-                mentions2 = sorted(map(lambda x: x.mention,mentions),key=lambda x: x.manual_polarity,reverse=True)
+                mentions2 = sorted(map(lambda x: x.mention,mentions),key=lambda x: x.manual_manual_polarity,reverse=True)
             else:
-                mentions2 = sorted(map(lambda x: x.mention,mentions),key=lambda x: x.manual_polarity,reverse=False)  
+                mentions2 = sorted(map(lambda x: x.mention,mentions),key=lambda x: x.manual_manual_polarity,reverse=False)  
                     
                            
     elif f_source != '': # source
@@ -2495,19 +2923,19 @@ def reload_tweets(request):
                             polarity_value = (polarity)
                         if order == 'data':
                             if ord_dir == 'desc':                                
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('date')
                         elif order == 'influence':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-source__influence')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('source__influence')
                         elif order == 'polarity':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-manual_polarity')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('manual_polarity')
                     else: # date + lang + influence
                         source = Source.objects.filter(source_name=f_source)
                         if polarity == 'all':
@@ -2516,19 +2944,19 @@ def reload_tweets(request):
                             polarity_value = (polarity)
                         if order == 'data':
                             if ord_dir == 'desc':                                
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('date')
                         elif order == 'influence':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-source__influence')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('source__influence')
                         elif order == 'polarity':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-manual_polarity')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('manual_polarity')
                     
     
                 else:
@@ -2540,17 +2968,17 @@ def reload_tweets(request):
                             polarity_value = (polarity)
                         if order == 'data':
                             if ord_dir == 'desc':                                
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('date')
                         elif order == 'influence':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-source__influence')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('source__influence')
                         elif order == 'polarity':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-manual_polarity')
                             else:
                                 mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('manual_polarity')
                     else: # date + lang 
@@ -2561,19 +2989,19 @@ def reload_tweets(request):
                             polarity_value = (polarity)
                         if order == 'data':
                             if ord_dir == 'desc':                                
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('-date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('-date')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('date')
                         elif order == 'influence':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('-source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('-source__influence')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('source__influence')
                         elif order == 'polarity':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('-manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('-manual_polarity')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),date__gt=date).order_by('manual_polarity')
             elif f_influence != '': 
                 if f_type != '': # date + influence + type
                     source = Source.objects.filter(source_name=f_source)               
@@ -2583,19 +3011,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('manual_polarity')
                 else: # date + influence 
                     source = Source.objects.filter(source_name=f_source)               
                     if polarity == 'all':
@@ -2604,19 +3032,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,source__influence__gt=float(f_influence),date__gt=date).order_by('manual_polarity')
             else:
                 if f_type != '': # date + type
                     source = Source.objects.filter(source_name=f_source)                
@@ -2626,19 +3054,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('-source__influence')
+                            mentions2 = Mention.objects.filtermanual_(polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date,source__type=f_type).order_by('manual_polarity')
                 else: # date 
                     source = Source.objects.filter(source_name=f_source)                
                     if polarity == 'all':
@@ -2647,19 +3075,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,date__gt=date).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,date__gt=date).order_by('manual_polarity')
         elif f_lang:
             if f_influence != '':
                 if f_type != '': # lang + influence + type
@@ -2671,19 +3099,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('manual_polarity')
                 else: # lang + influence
                     source = Source.objects.filter(source_name=f_source)
 
@@ -2693,19 +3121,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-source__influence')
+                            mentions2 = Mention.objects.filtermanual_(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('manual_polarity')
             else:
                 if f_type != '': # lang + type
                     source = Source.objects.filter(source_name=f_source)                
@@ -2715,19 +3143,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('manual_polarity')
                 else: # lang
                     source = Source.objects.filter(source_name=f_source)                
                     if polarity == 'all':
@@ -2736,19 +3164,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang)).order_by('manual_polarity')
         elif f_influence: 
             if f_type != '': # influence + type
                 source = Source.objects.filter(source_name=f_source)
@@ -2759,19 +3187,19 @@ def reload_tweets(request):
                     polarity_value = (polarity)
                 if order == 'data':
                     if ord_dir == 'desc':                                
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('date')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('date')
                 elif order == 'influence':
                     if ord_dir == 'desc':
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-source__influence')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-source__influence')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('source__influence')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('source__influence')
                 elif order == 'polarity':
                     if ord_dir == 'desc':
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-manual_polarity')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-manual_polarity')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('manual_polarity')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('manual_polarity')
             else: # influence 
                 source = Source.objects.filter(source_name=f_source)
                 
@@ -2781,19 +3209,19 @@ def reload_tweets(request):
                     polarity_value = (polarity)
                 if order == 'data':
                     if ord_dir == 'desc':                                
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('date')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('date')
                 elif order == 'influence':
                     if ord_dir == 'desc':
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-source__influence')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-source__influence')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('source__influence')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('source__influence')
                 elif order == 'polarity':
                     if ord_dir == 'desc':
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-manual_polarity')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-manual_polarity')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('manual_polarity')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('manual_polarity')
         elif f_type != '':
             source = Source.objects.filter(source_name=f_source)
                 
@@ -2803,19 +3231,19 @@ def reload_tweets(request):
                 polarity_value = (polarity)
             if order == 'data':
                 if ord_dir == 'desc':                                
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-date')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-date')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('date')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('date')
             elif order == 'influence':
                 if ord_dir == 'desc':
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-source__influence')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-source__influence')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('source__influence')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('source__influence')
             elif order == 'polarity':
                 if ord_dir == 'desc':
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-manual_polarity')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('-manual_polarity')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('manual_polarity')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source,lang=str(f_lang),source__type=f_type).order_by('manual_polarity')
         else: # # NO FILTERS
             source = Source.objects.filter(source_name=f_source)
             positiboak = Mention.objects.filter(polarity='P',source__in=source).order_by('-date')
@@ -2825,19 +3253,19 @@ def reload_tweets(request):
                 polarity_value = (polarity)
             if order == 'data':
                 if ord_dir == 'desc':                                
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source).order_by('-date')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source).order_by('-date')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source).order_by('date')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source).order_by('date')
             elif order == 'influence':
                 if ord_dir == 'desc':
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source).order_by('-source__influence')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source).order_by('-source__influence')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source).order_by('source__influence')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source).order_by('source__influence')
             elif order == 'polarity':
                 if ord_dir == 'desc':
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source).order_by('-manual_polarity')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source).order_by('-manual_polarity')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__in=source).order_by('manual_polarity')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__in=source).order_by('manual_polarity')
               
         
     else: # No selection, only filters
@@ -2851,19 +3279,19 @@ def reload_tweets(request):
                             polarity_value = (polarity)
                         if order == 'data':
                             if ord_dir == 'desc':                                
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('date')
                         elif order == 'influence':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-source__influence')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('source__influence')
                         elif order == 'polarity':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-manual_polarity')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('manual_polarity')
                     else: # lang + date + influence
                         if polarity == 'all':
                             polarity_value = ('P','N','NEU')
@@ -2871,19 +3299,19 @@ def reload_tweets(request):
                             polarity_value = (polarity)
                         if order == 'data':
                             if ord_dir == 'desc':                                
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('date')
                         elif order == 'influence':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-source__influence')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('source__influence')
                         elif order == 'polarity':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('-manual_polarity')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),date__gt=date).order_by('manual_polarity')
                 else:
                     if f_type != '': # lang + date + type
                         if polarity == 'all':
@@ -2892,19 +3320,19 @@ def reload_tweets(request):
                             polarity_value = (polarity)
                         if order == 'data':
                             if ord_dir == 'desc':                                
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-date')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('date')
                         elif order == 'influence':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-source__influence')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('source__influence')
                         elif order == 'polarity':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('-manual_polarity')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date,source__type=f_type).order_by('manual_polarity')
                     else: # lang + date
                         if polarity == 'all':
                             polarity_value = ('P','N','NEU')
@@ -2912,19 +3340,19 @@ def reload_tweets(request):
                             polarity_value = (polarity)
                         if order == 'data':
                             if ord_dir == 'desc':                                
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('-date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('-date')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('date')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('date')
                         elif order == 'influence':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('-source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('-source__influence')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('source__influence')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('source__influence')
                         elif order == 'polarity':
                             if ord_dir == 'desc':
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('-manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('-manual_polarity')
                             else:
-                                mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('manual_polarity')
+                                mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),date__gt=date).order_by('manual_polarity')
                     
             elif f_influence != '':
                 if f_type != '': # date + influence + type
@@ -2934,19 +3362,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date,source__type=f_type).order_by('manual_polarity')
                 else: # date + influence
                     if polarity == 'all':
                         polarity_value = ('P','N','NEU')
@@ -2954,19 +3382,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),date__gt=date).order_by('manual_polarity')
             else:
                 if f_type != '': # date + type
                     if polarity == 'all':
@@ -2975,19 +3403,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date,source__type=f_type).order_by('manual_polarity')
                 else: # date
                     if polarity == 'all':
                         polarity_value = ('P','N','NEU')
@@ -2995,19 +3423,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,date__gt=date).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,date__gt=date).order_by('manual_polarity')
         elif f_lang != '':
             if f_influence != '':
                 if f_type != '': # lang + influence + type
@@ -3017,19 +3445,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence),source__type=f_type).order_by('manual_polarity')
                 else: # lang + influence 
                     if polarity == 'all':
                         polarity_value = ('P','N','NEU')
@@ -3037,19 +3465,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__influence__gt=float(f_influence)).order_by('manual_polarity')
             else:
                 if f_type != '': # lang + type
                     if polarity == 'all':
@@ -3058,19 +3486,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang),source__type=f_type).order_by('manual_polarity')
                 else: # lang 
                     if polarity == 'all':
                         polarity_value = ('P','N','NEU')
@@ -3078,19 +3506,19 @@ def reload_tweets(request):
                         polarity_value = (polarity)
                     if order == 'data':
                         if ord_dir == 'desc':                                
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang)).order_by('-date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang)).order_by('-date')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang)).order_by('date')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang)).order_by('date')
                     elif order == 'influence':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang)).order_by('-source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang)).order_by('-source__influence')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang)).order_by('source__influence')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang)).order_by('source__influence')
                     elif order == 'polarity':
                         if ord_dir == 'desc':
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang)).order_by('-manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang)).order_by('-manual_polarity')
                         else:
-                            mentions2 = Mention.objects.filter(polarity__in=polarity_value,lang=str(f_lang)).order_by('manual_polarity')
+                            mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,lang=str(f_lang)).order_by('manual_polarity')
         elif f_influence != '': 
             if f_type != '': # influence + type
                 if polarity == 'all':
@@ -3099,19 +3527,19 @@ def reload_tweets(request):
                     polarity_value = (polarity)
                 if order == 'data':
                     if ord_dir == 'desc':                                
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('-date')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('date')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('date')
                 elif order == 'influence':
                     if ord_dir == 'desc':
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('-source__influence')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('-source__influence')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('source__influence')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('source__influence')
                 elif order == 'polarity':
                     if ord_dir == 'desc':
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('-manual_polarity')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('-manual_polarity')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('manual_polarity')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence),source__type=f_type).order_by('manual_polarity')
             else: # influence 
                 if polarity == 'all':
                     polarity_value = ('P','N','NEU')
@@ -3119,19 +3547,19 @@ def reload_tweets(request):
                     polarity_value = (polarity)
                 if order == 'data':
                     if ord_dir == 'desc':                                
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('-date')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('-date')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('date')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('date')
                 elif order == 'influence':
                     if ord_dir == 'desc':
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('-source__influence')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('-source__influence')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('source__influence')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('source__influence')
                 elif order == 'polarity':
                     if ord_dir == 'desc':
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('-manual_polarity')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('-manual_polarity')
                     else:
-                        mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('manual_polarity')
+                        mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__influence__gt=float(f_influence)).order_by('manual_polarity')
         elif f_type != '': # type
             if polarity == 'all':
                 polarity_value = ('P','N','NEU')
@@ -3139,19 +3567,19 @@ def reload_tweets(request):
                 polarity_value = (polarity)
             if order == 'data':
                 if ord_dir == 'desc':                                
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__type=f_type).order_by('-date')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__type=f_type).order_by('-date')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__type=f_type).order_by('date')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__type=f_type).order_by('date')
             elif order == 'influence':
                 if ord_dir == 'desc':
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__type=f_type).order_by('-source__influence')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__type=f_type).order_by('-source__influence')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__type=f_type).order_by('source__influence')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__type=f_type).order_by('source__influence')
             elif order == 'polarity':
                 if ord_dir == 'desc':
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__type=f_type).order_by('-manual_polarity')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__type=f_type).order_by('-manual_polarity')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value,source__type=f_type).order_by('manual_polarity')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value,source__type=f_type).order_by('manual_polarity')
         else: # all 
             neutroak=Mention.objects.filter(polarity='NEU').order_by('-date')
             if polarity == 'all':
@@ -3160,19 +3588,19 @@ def reload_tweets(request):
                 polarity_value = (polarity)
             if order == 'data':
                 if ord_dir == 'desc':                                
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value).order_by('-date')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value).order_by('-date')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value).order_by('date')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value).order_by('date')
             elif order == 'influence':
                 if ord_dir == 'desc':
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value).order_by('-source__influence')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value).order_by('-source__influence')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value).order_by('source__influence')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value).order_by('source__influence')
             elif order == 'polarity':
                 if ord_dir == 'desc':
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value).order_by('-manual_polarity')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value).order_by('-manual_polarity')
                 else:
-                    mentions2 = Mention.objects.filter(polarity__in=polarity_value).order_by('manual_polarity')
+                    mentions2 = Mention.objects.filter(manual_polarity__in=polarity_value).order_by('manual_polarity')
         
         
         
@@ -3210,12 +3638,12 @@ def reload_page_stats(request):
     date_b = request.GET.get("date_b","")
     date_e = request.GET.get("date_e","")
     if date_b != "":
-	date_b = date_b.split('/')[2]+'-'+date_b.split('/')[0]+'-'+date_b.split('/')[1]
+	date_b = date_b.split('-')[0]+'-'+date_b.split('-')[1]+'-'+date_b.split('-')[2]
     if date_e != "":
-	date_e = date_e.split('/')[2]+'-'+date_e.split('/')[0]+'-'+date_e.split('/')[1]
+	date_e = date_e.split('-')[0]+'-'+date_e.split('-')[1]+'-'+date_e.split('-')[2]
     project = request.GET.get("project","")
     category = request.GET.get("category","")
-    
+    print date_b, date_e
     if date_b != "":	
 	if date_e != "":
 	    if project != "":
@@ -3260,9 +3688,9 @@ def reload_page_stats(request):
     
     ### Progression ###
     
-    neutroak_chart = map(lambda x: x.mention,Keyword_Mention.objects.filter(query,mention__polarity='NEU'))
-    positiboak_chart = map(lambda x: x.mention,Keyword_Mention.objects.filter(query,mention__polarity='P'))
-    negatiboak_chart = map(lambda x: x.mention,Keyword_Mention.objects.filter(query,mention__polarity='N'))
+    neutroak_chart = map(lambda x: x.mention,Keyword_Mention.objects.filter(query,mention__manual_polarity='NEU'))
+    positiboak_chart = map(lambda x: x.mention,Keyword_Mention.objects.filter(query,mention__manual_polarity='P'))
+    negatiboak_chart = map(lambda x: x.mention,Keyword_Mention.objects.filter(query,mention__manual_polarity='N'))
 
     time_neutroak = {}
     time_positiboak = {}
@@ -3318,8 +3746,9 @@ def reload_page_stats(request):
         
        
     ### TOP Keyword #### 
-    
-    tag_cloud = Keyword_Mention.objects.filter(Q(mention__polarity__in=("P","N","NEU")),query).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    print query
+    tag_cloud = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in=("P","N","NEU")),query).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    print len(Keyword_Mention.objects.filter(Q(mention__manual_polarity__in=("P","N","NEU")),query))
     top_keyword = []
     top_keyword_d={}
     try:
@@ -3338,7 +3767,7 @@ def reload_page_stats(request):
     top_keyword_categories = ",".join(map(lambda x: '"'+x[0]+'"',top_keyword))
     top_keyword_values = map(lambda x: x[1],top_keyword)
 
-    tag_cloud_pos = Keyword_Mention.objects.filter(Q(mention__polarity="P"),query).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    tag_cloud_pos = Keyword_Mention.objects.filter(Q(mention__manual_polarity="P"),query).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
     
     top_keyword_pos = []
     top_keyword_d={}
@@ -3358,7 +3787,7 @@ def reload_page_stats(request):
     top_keyword_categories_pos = ",".join(map(lambda x: '"'+x[0]+'"',top_keyword_pos))
     top_keyword_values_pos = map(lambda x: x[1],top_keyword_pos)
 
-    tag_cloud_neg = Keyword_Mention.objects.filter(Q(mention__polarity="N"),query).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    tag_cloud_neg = Keyword_Mention.objects.filter(Q(mention__manual_polarity="N"),query).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
     
     top_keyword_neg = []
     top_keyword_d={}
@@ -3383,19 +3812,19 @@ def reload_page_stats(request):
 
     #mentions = Mention.objects.filter(Q(polarity__in=("P","N","NEU"),source__type="press"),query).values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
 
-    mentions = Keyword_Mention.objects.filter(Q(mention__polarity__in=("P","N","NEU"),mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in=("P","N","NEU"),mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_media = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_media_categories = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_media))
     top_media_values = map(lambda x: x.get("dcount"),top_media)
 
-    mentions = Keyword_Mention.objects.filter(Q(mention__polarity__in="P",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="P",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_media_pos = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_media_categories_pos = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_media_pos))
     top_media_values_pos = map(lambda x: x.get("dcount"),top_media_pos)
 
-    mentions = Keyword_Mention.objects.filter(Q(mention__polarity__in="N",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="N",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_media_neg = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_media_categories_neg = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_media_neg))
@@ -3404,19 +3833,19 @@ def reload_page_stats(request):
     
     ## TOP Twitter ###
     
-    mentions = Keyword_Mention.objects.filter(Q(mention__polarity__in=("P","N","NEU"),mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in=("P","N","NEU"),mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_twitter = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_twitter_categories = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_twitter))
     top_twitter_values = map(lambda x: x.get("dcount"),top_twitter)
 
-    mentions = Keyword_Mention.objects.filter(Q(mention__polarity__in="P",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="P",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_twitter_pos = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_twitter_categories_pos = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_twitter_pos))
     top_twitter_values_pos = map(lambda x: x.get("dcount"),top_twitter_pos)
 
-    mentions = Keyword_Mention.objects.filter(Q(mention__polarity__in="N",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="N",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_twitter_neg = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_twitter_categories_neg = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_twitter_neg))
@@ -3461,9 +3890,9 @@ def stats(request):
         log_in(request)
     filter_form = FilterStatsForm()
     
-    neutroak=Mention.objects.filter(polarity='NEU').order_by('-date')
-    positiboak=Mention.objects.filter(polarity='P').order_by('-date')
-    negatiboak=Mention.objects.filter(polarity='N').order_by('-date')
+    neutroak=Mention.objects.filter(manual_polarity='NEU').order_by('-date')
+    positiboak=Mention.objects.filter(manual_polarity='P').order_by('-date')
+    negatiboak=Mention.objects.filter(manual_polarity='N').order_by('-date')
     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
     neutroak_c=len(neutroak)
     positiboak_c=len(positiboak)
@@ -3485,10 +3914,11 @@ def stats(request):
         month = '12'
         year = str(int(year)-1)
     date = year+'-'+month+'-'+day
+    filter_form = FilterStatsForm(initial={'date_b':year+'-'+month+'-'+day})
     
-    neutroak_chart=Mention.objects.filter(polarity='NEU',date__gt=date)
-    positiboak_chart=Mention.objects.filter(polarity='P',date__gt=date)
-    negatiboak_chart=Mention.objects.filter(polarity='N',date__gt=date)
+    neutroak_chart=Mention.objects.filter(manual_polarity='NEU',date__gt=date)
+    positiboak_chart=Mention.objects.filter(manual_polarity='P',date__gt=date)
+    negatiboak_chart=Mention.objects.filter(manual_polarity='N',date__gt=date)
 
     time_neutroak = {}
     time_positiboak = {}
@@ -3541,7 +3971,7 @@ def stats(request):
        
     ### TOP Keyword #### 
     
-    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU")).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    tag_cloud = Keyword_Mention.objects.filter(mention__date__gt=date,mention__manual_polarity__in=("P","N","NEU")).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
     
     top_keyword = []
     top_keyword_d={}
@@ -3558,7 +3988,7 @@ def stats(request):
     top_keyword_categories = ",".join(map(lambda x: '"'+x[0]+'"',top_keyword))
     top_keyword_values = map(lambda x: x[1],top_keyword)
 
-    tag_cloud_pos = Keyword_Mention.objects.filter(mention__polarity="P").values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    tag_cloud_pos = Keyword_Mention.objects.filter(mention__date__gt=date,mention__manual_polarity="P").values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
     
     top_keyword_pos = []
     top_keyword_d={}
@@ -3575,7 +4005,7 @@ def stats(request):
     top_keyword_categories_pos = ",".join(map(lambda x: '"'+x[0]+'"',top_keyword_pos))
     top_keyword_values_pos = map(lambda x: x[1],top_keyword_pos)
 
-    tag_cloud_neg = Keyword_Mention.objects.filter(mention__polarity="N").values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    tag_cloud_neg = Keyword_Mention.objects.filter(mention__manual_polarity="N").values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
     
     top_keyword_neg = []
     top_keyword_d={}
@@ -3595,19 +4025,19 @@ def stats(request):
     
     ### TOP MEDIA ###
 
-    mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),source__type="press").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
+    mentions = Mention.objects.filter(date__gt=date,manual_polarity__in=("P","N","NEU"),source__type="press").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
 
     top_media = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_media_categories = ",".join(map(lambda x: '"'+x.get('source__source_name')+'"',top_media))
     top_media_values = map(lambda x: x.get("dcount"),top_media)
 
-    mentions = Mention.objects.filter(polarity="P",source__type="press").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
+    mentions = Mention.objects.filter(date__gt=date,manual_polarity="P",source__type="press").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
 
     top_media_pos = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_media_categories_pos = ",".join(map(lambda x: '"'+x.get('source__source_name')+'"',top_media_pos))
     top_media_values_pos = map(lambda x: x.get("dcount"),top_media_pos)
 
-    mentions = Mention.objects.filter(polarity="N",source__type="press").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
+    mentions = Mention.objects.filter(date__gt=date,manual_polarity="N",source__type="press").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
 
     top_media_neg = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_media_categories_neg = ",".join(map(lambda x: '"'+x.get('source__source_name')+'"',top_media_neg))
@@ -3615,19 +4045,19 @@ def stats(request):
     
     ## TOP Twitter ###
     
-    mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),source__type="Twitter").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
+    mentions = Mention.objects.filter(date__gt=date,manual_polarity__in=("P","N","NEU"),source__type="Twitter").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
 
     top_twitter = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_twitter_categories = ",".join(map(lambda x: '"'+x.get('source__source_name')+'"',top_twitter))
     top_twitter_values = map(lambda x: x.get("dcount"),top_twitter)
 
-    mentions = Mention.objects.filter(polarity="P",source__type="Twitter").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
+    mentions = Mention.objects.filter(date__gt=date,manual_polarity="P",source__type="Twitter").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
 
     top_twitter_pos = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_twitter_categories_pos = ",".join(map(lambda x: '"'+x.get('source__source_name')+'"',top_twitter_pos))
     top_twitter_values_pos = map(lambda x: x.get("dcount"),top_media_pos)
 
-    mentions = Mention.objects.filter(polarity="N",source__type="Twitter").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
+    mentions = Mention.objects.filter(date__gt=date,manual_polarity="N",source__type="Twitter").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
 
     top_twitter_neg = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_twitter_categories_neg = ",".join(map(lambda x: '"'+x.get('source__source_name')+'"',top_twitter_neg))
@@ -3662,8 +4092,9 @@ def stats(request):
 
 def home(request):
     """Render main template"""
+
     login_form = LoginForm()
-    filter_form = FilterForm()
+    filter_form = FilterForm(initial={"date":"1_month"})
     mention_form = MentionForm()
     
     if 'login' in request.POST:
@@ -3676,9 +4107,26 @@ def home(request):
             save_mention(mention_form.cleaned_data)
         
     
-    neutroak=Mention.objects.filter(polarity='NEU').order_by('-date')
-    positiboak=Mention.objects.filter(polarity='P').order_by('-date')
-    negatiboak=Mention.objects.filter(polarity='N').order_by('-date')
+    now = datetime.datetime.now()
+    now_date = str(now).split()[0]
+
+    day = str(now_date).split()[0].split('-')[2]
+    month = str(now_date).split()[0].split('-')[1]
+    year = str(now_date).split()[0].split('-')[0]
+    if int(month) > 1:
+        month = str(int(month)-1)
+        if int(month) <10:
+            month='0'+str(month)
+    else:
+        month = '12'
+        year = str(int(year)-1)
+    date = year+'-'+month+'-'+day
+
+
+
+    neutroak=Mention.objects.filter(manual_polarity='NEU',date__gt=date).order_by('-date')
+    positiboak=Mention.objects.filter(manual_polarity='P',date__gt=date).order_by('-date')
+    negatiboak=Mention.objects.filter(manual_polarity='N',date__gt=date).order_by('-date')
     denak=sorted(list(neutroak)+list(positiboak)+list(negatiboak),key=lambda x: x.date,reverse=True)
     neutroak_c=len(neutroak)
     positiboak_c=len(positiboak)
@@ -3686,8 +4134,8 @@ def home(request):
     denak_c=len(neutroak)+len(positiboak)+len(negatiboak)
     
 
-    tag_cloud = Keyword_Mention.objects.filter(mention__polarity__in=("P","N","NEU")).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
-    source_tag_cloud = Mention.objects.filter(polarity__in=("P","N","NEU")).values('source__source_name','source__type').annotate(dcount=Count('source__source_name'))
+    tag_cloud = Keyword_Mention.objects.filter(mention__date__gt=date,mention__manual_polarity__in=("P","N","NEU")).values('keyword').annotate(dcount=Count('keyword')).order_by('-dcount')
+    source_tag_cloud = Mention.objects.filter(date__gt=date,manual_polarity__in=("P","N","NEU")).values('source__source_name','source__type').annotate(dcount=Count('source__source_name'))
     lainoa = []
     lainoa_d={}
     tot = reduce(lambda x,y: x+y ,map(lambda z:z.get('dcount'),tag_cloud))
@@ -3724,7 +4172,10 @@ def home(request):
     for i in neutroak:
         if not i.url in source_d.keys():
             neutroak_min+=[i]
-            source_d[i.url]=''
+            source_d[i.url]=1
+	elif source_d[i.url]<3:
+            neutroak_min+=[i]
+            source_d[i.url]+=1
         if len(neutroak_min)==20:
             break
     
@@ -3733,7 +4184,10 @@ def home(request):
     for i in positiboak:
         if not i.url in source_d.keys():
             positiboak_min+=[i]
-            source_d[i.url]=''
+            source_d[i.url]=1
+	elif source_d[i.url]<3:
+            positiboak_min+=[i]
+            source_d[i.url]+=1
         if len(positiboak_min)==20:
             break   
            
@@ -3742,7 +4196,10 @@ def home(request):
     for i in negatiboak:
         if not i.url in source_d.keys():
             negatiboak_min+=[i]
-            source_d[i.url]=''
+            source_d[i.url]=1
+	elif source_d[i.url]<3:
+            negatiboak_min+=[i]
+            source_d[i.url]+=1
         if len(negatiboak_min)==20:
             break  
             
@@ -3751,7 +4208,10 @@ def home(request):
     for i in denak:
         if not i.url in source_d.keys():
             denak_min+=[i]
-            source_d[i.url]=''
+            source_d[i.url]=1
+	elif source_d[i.url]<3:
+            denak_min+=[i]
+            source_d[i.url]+=1
         if len(denak_min)==20:
             break   
 
@@ -3771,9 +4231,9 @@ def home(request):
         year = str(int(year)-1)
     date = year+'-'+month+'-'+day
     
-    neutroak_chart=Mention.objects.filter(polarity='NEU',date__gt=date)
-    positiboak_chart=Mention.objects.filter(polarity='P',date__gt=date)
-    negatiboak_chart=Mention.objects.filter(polarity='N',date__gt=date)
+    neutroak_chart=Mention.objects.filter(manual_polarity='NEU',date__gt=date)
+    positiboak_chart=Mention.objects.filter(manual_polarity='P',date__gt=date)
+    negatiboak_chart=Mention.objects.filter(manual_polarity='N',date__gt=date)
 
     
 
@@ -3832,9 +4292,46 @@ def home(request):
     
 @login_required  
 def manage_mentions(request):
-    mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),corrected=False)
-    
-    return render_to_response('manage_mentions.html', {"mentions":mentions}, context_instance = RequestContext(request))
+    #mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),corrected=False)
+    category = request.GET.get("category","")
+    if category == 'ez_zuzendu' or category=='':
+        mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),corrected=False)
+    elif category == 'zuzenduak':
+        mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),corrected=True)
+    elif category == 'positiboak':
+        mentions = Mention.objects.filter(polarity="P")
+    elif category == 'negatiboak':
+        mentions = Mention.objects.filter(polarity="N")
+    elif category == 'neutroak':
+        mentions = Mention.objects.filter(polarity="NEU")
+    elif category == 'twitter':
+        mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),source__type="Twitter")
+    elif category == 'prentsa':
+        mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),source__type="press")
+    elif category == 'eu':
+        mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),lang="eu")
+    elif category == 'es':
+        mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),lang="es")
+    elif category == 'en':
+        mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),lang="en")
+    elif category == 'fr':
+        mentions = Mention.objects.filter(polarity__in=("P","N","NEU"),lang="fr")
+    else:
+        mentions = []
+
+    paginator = Paginator(mentions, 100) 
+
+    page = request.GET.get('page')
+    try:
+        mentions = paginator.page(page)
+    except PageNotAnInteger:
+        # If page is not an integer, deliver first page.
+        mentions = paginator.page(1)
+    except EmptyPage:
+        # If page is out of range (e.g. 9999), deliver last page of results.
+        mentions = paginator.page(paginator.num_pages)
+
+    return render_to_response('manage_mentions.html', {"mentions":mentions,"category":category}, context_instance = RequestContext(request))
     
 
 @login_required  
@@ -3850,6 +4347,7 @@ def manage_keywords(request):
             keyword.subCat = cd.get("subCat")
             keyword.term = cd.get("term")
             keyword.screen_tag = cd.get("screen_tag")
+	    keyword.lang=cd.get("lang")
             keyword.save()
         else:
             if request.POST.get('id')=='':
@@ -3861,6 +4359,7 @@ def manage_keywords(request):
                 keyword.subCat = request.POST.get("subCat")
                 keyword.term = request.POST.get("term")
                 keyword.screen_tag = request.POST.get("screen_tag")
+		keyword.lang=request.POST.get("lang")
                 keyword.save()
 
     keywords = Keyword.objects.all()

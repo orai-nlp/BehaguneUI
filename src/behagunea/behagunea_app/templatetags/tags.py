@@ -7,6 +7,13 @@ from django.utils.translation import ugettext as _,get_language
 register = template.Library()
 
 
+@register.filter(name='uniq_screentags')
+def uniq_screentags(value):
+    screen_tags = map(lambda x: x.screen_tag,value)
+    uniq_screen_tags = sorted(list(set(screen_tags)))
+    return uniq_screen_tags
+
+
 @register.filter(name='clean_date')
 def clean_date(value):
     import datetime

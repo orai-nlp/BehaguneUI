@@ -20,6 +20,8 @@
         <link href="{{ STATIC_URL }}css/svg-responsive.css" rel="stylesheet">
         <link href="{{ STATIC_URL }}css/custom.css" rel="stylesheet">
         <link href="{{ STATIC_URL }}css/tooltipster.css" rel="stylesheet">
+	<!--Emoji rendering styles-->
+        <link href="{{ STATIC_URL }}css/emoji.css" rel="stylesheet">
         <!-- Custom Fonts -->
         <link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css" rel="stylesheet" type="text/css">
         <link href='http://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
@@ -52,7 +54,7 @@
                             </li>
                             {% else %}
                             <li>
-                                <form name="setLang{{ key }}" action="/i18n/setlang/" method="POST">{% csrf_token %}
+                                <form name="setLang{{ key }}" action="behagunea.dss2016.eu/i18n/setlang/" method="POST">{% csrf_token %}
                                     <input name="next" type="hidden" value="#" />
                                     <input type="hidden" name="language" value="{{ key }}" />
                                 </form>
@@ -66,19 +68,19 @@
             </div>
         </div>
         <div class="mobile">
-            <h2><a href="/">Behagunea</a></h2>
+            <h2><a href="http://behagunea.dss2016.eu/">Behagunea</a></h2>
         </div>
         <ul class="profile_menu">
             {% if user.is_authenticated %}
-            <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
-            <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
-            <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/logout/">{% trans "Atera" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
             <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
             <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
             {% else %}
             <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
             <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
             {% endif %}
         </ul>
@@ -100,15 +102,15 @@
                             </li>
                             <ul class="mobile">
                                 {% if user.is_authenticated %}
-                                <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
-                                <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
-                                <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/logout/">{% trans "Atera" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
                                 <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
                                 <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
                                 {% else %}
                                 <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
                                 <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
                                 {% endif %}
                             </ul>
@@ -247,7 +249,7 @@
         </div>
         <div id="tweets" class="row">
             <div class="percent_100  underlined">
-                <h3 class="">{% trans "Aipamenak" %} <span> ({% trans "Denak"%})</span><a class="minimize_maximize" href="#"><img src="{{ STATIC_URL}}img/minimize.png" style="float:right; width:20px;"/></a></h3>
+                <h3 class="">{% trans "Aipamenak" %} <span> ([{% trans "Filters" %}]: {% trans "date" %}: {% trans "1_month" %})</span><a class="minimize_maximize" href="#"><img src="{{ STATIC_URL}}img/minimize.png" style="float:right; width:20px;"/></a></h3>
             </div>
             <div id="row_2">
                 <div class="percent_40">
@@ -358,6 +360,36 @@
                 </div>
             </div>
         </div>
+	<footer class="footer" role="contentinfo" >
+	  <div class="container bordertopFooter">
+	    <div class="span12 ezezkmargin blankContainer">	      
+                <ul class="footer-ul">
+		  <li>
+		    Behagunea is free software licensed under GPL v3. 
+		  </li>
+		  <li>
+                    <a href="http://github.com/Elhuyar/BehaguneUI"><i class="fa fa-github"></i> Github</a>
+		  </li>
+		  <li>
+                  <a href="#"><i class="fa fa-envelope"></i></a> : <a href="mailto:behagunea@elhuyar.com" target="_blank">behagunea@elhuyar.com</a>
+		  </li>
+                </ul>
+              
+
+	      <!--<div class="span3">
+                <p>
+                  <a href="http://github.com/Elhuyar/BehaguneUI"><i class="fa fa-github"></i> Github</a>
+                </p>
+              </div>
+              <div class="span3">
+                <p>
+                  <a href="#"><i class="fa fa-envelope"></i></a> : <a href="mailto:behagunea@elhuyar.com" target="_blank">behagunea@elhuyar.com</a>
+                </p>  
+              </div>-->                    
+	    </div>
+	  </div>
+	</footer>
+
         <!-- jQuery -->
         <script src="{{ STATIC_URL }}js/jquery.js"></script>
         <!-- Bootstrap Core JavaScript -->
@@ -368,6 +400,8 @@
         <script src="{{ STATIC_URL }}js/jquery.tooltipster.min.js"></script>
         <!-- Pie chart -->
         <script src="{{ STATIC_URL }}js/d3pie.min.js"></script>
+        <!-- D3 fisheye efect -->
+        <script src="{{ STATIC_URL }}js/d3fisheye.js"></script>
         
         <!-- Custom Theme JavaScript -->
         <script src="{{ STATIC_URL }}js/scripts.js"></script>
@@ -399,6 +433,11 @@
             main_page_graphs();
             
         </script> 
+
+        <!-- Emoji rendering functions -->
+        <script src="{{ STATIC_URL }}js/twemoji.min.js"></script>
+        <script src="{{ STATIC_URL }}js/emoji.js"></script>
+
     </body>
 </html>
 

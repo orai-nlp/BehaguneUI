@@ -379,9 +379,11 @@ function show_pie(id, width, height) {
     },
     'labels': {
       'outer': {
-        'pieDistance': 12
+	'format': 'label-value2',
+        'pieDistance': 15
       },
       'inner': {
+	'format': 'percentage',
         'hideWhenLessThanPercentage': 3
       },
       'mainLabel': {
@@ -392,8 +394,7 @@ function show_pie(id, width, height) {
         'decimalPlaces': 0
       },
       'value': {
-        'color': '#adadad',
-        'fontSize': 20
+        'color': '#000000'
       },
       'lines': {
         'enabled': true
@@ -442,30 +443,6 @@ function show_tag_cloud(id, width, height) {
                 return textScale(d.size);
 	}).on('end', draw).start();
   function draw(words) {
-    /*d3.select(id).append('svg').attr('width', w).attr('height', h).append('g').attr('transform', 'translate(' + [w >> 1,
-    h >> 1] + ')').selectAll('text').data(words).enter().append('text')
-    //.style("font-size", function(d) { return d.size + "px"; })
-    .style('font-size', function (d) {
-      return d.size + 'px';
-    })
-    //.style("font-size", function(d) { return Math.min( d.size,  d.size/this.getComputedTextLength() * 24) + "px"; })
-    .style('font-family', 'Impact').style('text-color', 'black').style('fill', function (d, i) {
-      return fill(i);
-    }).attr('text-anchor', 'middle').attr('transform', function (d) {
-      return 'translate(' + [d.x,
-      d.y] + ')rotate(' + d.rotate + ')';
-    }).text(function (d) {
-      return d.text;
-    }).on('click', function (d) {
-      reload_from_tag(d.text);
-    }
-    ).on('mouseover', function (d) {
-      document.body.style.cursor = 'pointer';
-    }
-    ).on('mouseout', function (d) {
-      document.body.style.cursor = 'default';
-    }
-    );*/
     var svg = d3.select(id)
 		.append("div")
 		.classed("svg-container", true) //container class to make it responsive
@@ -483,7 +460,6 @@ function show_tag_cloud(id, width, height) {
               .selectAll("text")
                 .data(words)       
 		.enter().append("text")
-                //.style("font-size", function(d) { return d.size + "px"; })
 	        .style("font-size", function(d) { return d.size + "px"; })
                 //.style("font-size", function(d) { return Math.min( d.size,  d.size/this.getComputedTextLength() * 24) + "px"; })
 		.style("font-family", "Impact")
@@ -502,58 +478,23 @@ function show_tag_cloud(id, width, height) {
                  .on("mouseout", function(d) {
                         document.body.style.cursor = 'default'; }
                  );
-    if ('author' == 'author')
-    {
-      //document.getElementById('tagCloud').style.display="none";
-    }
+
+     var fisheye = d3.fisheye.circular()
+          .radius(100)
+          .distortion(5);
+
+
+      svg.on("mousemove", function() {
+          fisheye.focus([d3.mouse(this)[0]-w/2,d3.mouse(this)[1]-h/2]);
+          d3.selectAll("text").each(function(d) { d.fisheye = fisheye(d); })
+          .attr("transform", function(d) {
+             return "translate(" + [d.fisheye.x , d.fisheye.y] + ")rotate(" + d.rotate + ")";
+             })      
+      });
+
+
   }
-  /*
-        function draw(words) {
-              d3.select(id).append("svg")
-                .attr("width", w) 
-                .attr("height", h)
-              .append("g")
-                .attr("transform", "translate("+ [w >> 1, h >> 1] +")")
-              .selectAll("text")
-                .data(words)       
-		.enter().append("text")
-	        .attr("text-anchor", "middle")	        
-		.each(function(d){
-		    d3.select(this).append("tspan")
-			.style("font-size", function(r) { return d.size + "px"; })
-			.style("font-family", "Impact")
-			.style("fill", "black")  //function(d, i) { return fill(i); })
-			.attr("text-anchor", "middle")
-			.attr("dy",0)
-			.attr("x",0)
-			.text(function(r) { return r.text; });
-		    d3.select(this).append("tspan")
-			.style("font-size", function(r) { return (d.size-5) + "px"; })
-			.style("font-family", "Impact")
-			.style("fill", "green") //.style("fill", function(d, i) { return fill(i); })
-			.attr("text-anchor", "middle")
-			.attr("dy",function(r){return (d.size*0.6) + "px";})
-			.attr("x",0)
-			.text(function(r) { return r.text; });
-		    d3.select(this).append("tspan")
-			.style("font-size", function(r) { return (d.size-5) + "px"; })
-			.style("font-family", "Impact")
-			.style("fill", "red")  //.style("fill", function(d, i) { return fill(i); })
-			.attr("text-anchor", "middle")
-			.attr("dy",function(r){return (d.size) + "px";})
-			.attr("x",0)
-			.text(function(r) { return r.text; });
-		})
-		.attr("transform", function(d) {
-		    return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";});
-
-            if ("author" == "author")
-            {
-	        //document.getElementById('tagCloud').style.display="none";
-            }
-        }
-*/
-
+  
 }
 function show_source_tag_cloud(id, width, height) {
   var wordInfo = JSON.parse(source_lainoa);
@@ -561,6 +502,7 @@ function show_source_tag_cloud(id, width, height) {
   var fill = d3.scale.category20();
   //var fontSize = d3.scale.log().range([10, 100]);
   //var width = $('#tagCloud').parent().parent().width();
+  var textScale=d3.scale.log().range([1, 14]);
   var w = width;
   var h = height;
   word_cloud = d3.layout.cloud().size([w,
@@ -571,13 +513,15 @@ function show_source_tag_cloud(id, width, height) {
     };
   })).padding(1).timeInterval(400).rotate(function () {
     return ~~(Math.random() * 2) * 0;
-  }).font('Impact').fontSize(function (d) {
-    var window_width = $(window).width();
-    if (window_width < 800)
-    return d.size / 2.5;
-     else
-    return d.size;
+  }).font('Impact').fontSize(function(d){
+            var window_width=$(window).width();
+            if (window_width<800)
+                return textScale(d.size/2.5);
+            else
+                return textScale(d.size);
   }).on('end', draw).start();
+
+
   function draw(words) {
     var svg = d3.select(id)
 		.append("div")
@@ -588,7 +532,7 @@ function show_source_tag_cloud(id, width, height) {
 		.attr("viewBox",  0 + " " + 0 + " " + w + " " + h)
 	    //class to make it responsive
 		.classed("svg-content-responsive", true); 
-		//.attr("width", w) 
+      //.attr("width", w) 
                 //.attr("height", h)
 
               svg.append("g")
@@ -596,8 +540,7 @@ function show_source_tag_cloud(id, width, height) {
               .selectAll("text")
                 .data(words)       
 		.enter().append("text")
-                //.style("font-size", function(d) { return d.size + "px"; })
-	        .style("font-size", function(d) { return d.size + "px"; })
+                .style("font-size", function(d) { return d.size + "px"; })
                 //.style("font-size", function(d) { return Math.min( d.size,  d.size/this.getComputedTextLength() * 24) + "px"; })
 		.style("font-family", "Impact")
 	        .style("text-color", "black")
@@ -615,10 +558,21 @@ function show_source_tag_cloud(id, width, height) {
                  .on("mouseout", function(d) {
                         document.body.style.cursor = 'default'; }
                  );
-    if ('author' == 'author')
-    {
-      //document.getElementById('tagCloud').style.display="none";
-    }
+      var fisheye = d3.fisheye.circular()
+	  .radius(100)
+	  .distortion(5);
+
+     
+      svg.on("mousemove", function() {
+	  fisheye.focus([d3.mouse(this)[0]-w/2,d3.mouse(this)[1]-h/2]);
+	  d3.selectAll("text").each(function(d) { d.fisheye = fisheye(d); })
+          .attr("transform", function(d) {
+             return "translate(" + [d.fisheye.x , d.fisheye.y] + ")rotate(" + d.rotate + ")";
+             })
+	  .style("font-size", function(d) { return (d.size + 20) + "px"; })
+	
+      });
+
   }
 }
 
@@ -743,7 +697,8 @@ function main_page_graphs() {
 }
 function stats_page_graphs() {
   //show_pie('pieChart', $('#pieChart').width() * 0.6, $('#pieChart').width() * 0.4);
-  show_chart('timeChart', $('#timeChart').width()*1.2, $('#timeChart').width()*0.2);
+  //show_chart('timeChart', $('#timeChart').width()*1.2, $('#timeChart').width()*0.2);
+  show_chart('timeChart', window.innerWidth*0.95, $('#timeChart').width()*0.2);
   show_bar_chart('barChartAll',top_keyword_categories,top_keyword_values);
   show_bar_chart('barChartPos',top_keyword_categories_pos,top_keyword_values_pos);
   show_bar_chart('barChartNeg',top_keyword_categories_neg,top_keyword_values_neg);
@@ -1082,7 +1037,7 @@ function reload_with_filters_stats() {
     top_twitter_categories_neg = JSON.parse($(data) [44].innerHTML);
     top_twitter_values_neg = JSON.parse($(data) [46].innerHTML);
     $('#timeChart svg').remove();
-    $('#timeChart').html('<svg class="visualisation" style="width:90%;height:300px;"></svg>');
+    $('#timeChart').html('<svg class="visualisation" style="width:97%;height:300px;"></svg>');
     $('#barChartAll svg').remove();
     $('#barChartPos svg').remove();
     $('#barChartNeg svg').remove();
@@ -1092,7 +1047,8 @@ function reload_with_filters_stats() {
     $('#barChart3All svg').remove();
     $('#barChart3Pos svg').remove();
     $('#barChart3Neg svg').remove();
-    show_chart('timeChart', $('#timeChart').width()*1.2, $('#timeChart').width()*0.2);
+    //show_chart('timeChart', $('#timeChart').width()*1.2, $('#timeChart').width()*0.2);
+    show_chart('timeChart', window.innerWidth*0.95, $('#timeChart').width()*0.2); 
     show_bar_chart('barChartAll',top_keyword_categories,top_keyword_values);
     show_bar_chart('barChartPos',top_keyword_categories_pos,top_keyword_values_pos);
     show_bar_chart('barChartNeg',top_keyword_categories_neg,top_keyword_values_neg);
@@ -1106,8 +1062,8 @@ function reload_with_filters_stats() {
   });
 }
 function reload_from_manage_mentions_button(category) {
-  $('#loading_modal').modal('show');
-  $.ajax({
+  //$('#loading_modal').modal('show');
+  /*$.ajax({
     method: 'GET',
     url: '/reload_manage_mentions_page',
     dataType: 'html',
@@ -1118,7 +1074,8 @@ function reload_from_manage_mentions_button(category) {
     var new_row = $(data) [0];
     $('.container table').parent().html(new_row);
     $('#loading_modal').modal('hide');
-  });
+  });*/
+  window.location.href="?category="+category;
 }
 function reload_all() {
   $('.jarri').parent().attr('class', 'btn btn-lg btn-success active');
@@ -1206,3 +1163,15 @@ function delete_mention(id) {
   }
 }
 
+
+function get_filter_parameters(){
+
+    var date_b = $('#id_date_b').val();
+    var date_e = $('#id_date_e').val();
+    var category = $('#id_category').val();
+    var project = $('#id_project').val();
+
+    $("#export_stats").attr("href",$("#export_stats").attr("href")+'?date_b='+date_b+'&date_e='+date_e+'&category='+category+'&project='+project);
+
+
+}

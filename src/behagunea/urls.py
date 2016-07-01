@@ -18,6 +18,7 @@ urlpatterns = [
     url(r'reload_manage_mentions_page',views.reload_manage_mentions_page),
     url(r'reload_projects_filter',views.reload_projects_filter),
     url(r'reload_tweets',views.reload_tweets),
+    url(r'export_stats',views.export_stats),
     url(r'export',views.export),
     url(r'keyword_form',views.get_keyword),
     url(r'update_polarity',views.update_polarity),

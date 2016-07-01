@@ -1,4 +1,6 @@
+{% load tags %}
+
 <option value=""></option>
-{% for i in projects %}
-<option value="{{ i.screen_tag }}">{{ i.screen_tag }}</option>
+{% for i in projects|uniq_screentags %}
+<option value="{{ i }}">{{ i }}</option>
 {% endfor %}

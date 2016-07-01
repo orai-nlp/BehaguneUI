@@ -50,7 +50,7 @@
                             </li>
                             {% else %}
                             <li>
-                                <form name="setLang{{ key }}" action="/i18n/setlang/" method="POST">{% csrf_token %}
+                                <form name="setLang{{ key }}" action="http://behagunea.dss2016.eu/i18n/setlang/" method="POST">{% csrf_token %}
                                     <input name="next" type="hidden" value="#" />
                                     <input type="hidden" name="language" value="{{ key }}" />
                                 </form>
@@ -64,19 +64,19 @@
             </div>
         </div>
         <div class="mobile">
-            <h2><a href="/">Behagunea</a></h2>
+            <h2><a href="http://behagunea.dss2016.eu/">Behagunea</a></h2>
         </div>
         <ul class="profile_menu">
             {% if user.is_authenticated %}
-            <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
-            <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
-            <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/logout/">{% trans "Atera" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
             <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
             <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
             {% else %}
             <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-            <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
             <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
             {% endif %}
         </ul>
@@ -94,19 +94,19 @@
                         <!-- Button Menu Mobile END -->
                         <ul class="nav menu nav-pills menuorokorra BuruMenua collapse ">
                             <li class="parent ez_mobile">
-                                <h2>Behagunea</h2>
+                                <h2><a href="http://behagunea.dss2016.eu/">Behagunea</a></h2>
                             </li>
                             <ul class="mobile">
                                 {% if user.is_authenticated %}
-                                <li class=""><a href="/logout/">{% trans "Atera" %}</a></li>
-                                <li class=""><a href="/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
-                                <li class=""><a href="/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/logout/">{% trans "Atera" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
                                 <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016/stats">{% trans "Ikusi estatistikak" %}</a></li>
                                 <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
                                 {% else %}
                                 <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
-                                <li class=""><a href="/stats">{% trans "Ikusi estatistikak" %}</a></li>
+                                <li class=""><a href="http://behagunea.dss2016.eu/stats">{% trans "Ikusi estatistikak" %}</a></li>
                                 <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
                                 {% endif %}
                     </ul>
