@@ -3,7 +3,7 @@
 Django Web application for monitoring opinions about events
 
 This repository contains the User Interface and data visualization software. Data is read from a MYSQL database fed by Elhuyar/MSM software(https://github.com/Elhuyar/MSM) and sentiment analysis is provided by the Elhuyar/Elixa software (https://github.com/Elhuyar/Elixa).
-The database structure and the information required for setting up the database is part of the MSM crawler documentation: https://github.com$
+The database structure and the information required for setting up the database is part of the MSM crawler documentation: https://github.com/Elhuyar/MSM
 
 Just clone the repositorty and execute the usual django buildout programs.
 
