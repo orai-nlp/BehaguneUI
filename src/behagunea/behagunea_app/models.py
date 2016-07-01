@@ -34,6 +34,9 @@ class Source(models.Model):
     source_name = models.CharField(max_length=45)
     user = models.ForeignKey(user,null=True) 
     domain = models.TextField(default='')
+    friends = models.IntegerField()
+    followers = models.IntegerField()
+    geoinfo = models.CharField(max_length=80)
        
        
 class Mention(models.Model):
@@ -48,6 +51,10 @@ class Mention(models.Model):
     corrected = models.BooleanField(default=False)
     favourites = models.IntegerField(default=0)
     retweets = models.IntegerField(default=0)
+    native_id = models.BigIntegerField()
+    retweet_id = models.BigIntegerField()
+    geoinfo = models.CharField(max_length=80)
+	
        
 class Keyword_Mention(models.Model):
     mention = models.ForeignKey(Mention,null=False)   
