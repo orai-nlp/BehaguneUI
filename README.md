@@ -14,7 +14,7 @@ python bootstrap.py
 ./bin/buildout
 ````
 
-The last step is to setup your django application. Edit the 'src/behagunea/settings.py' and fill the following fields according to your configuration:
+The last step is to setup your django application. Edit the ```src/behagunea/settings.py``` file and fill the following fields according to your configuration:
 ```
       'NAME': 'yourDBNAME',                      # Or path to database file if using sqlite3. 
       'PASSWORD': 'yourMYSQLuserPassword',                  # Not used with sqlite3.
