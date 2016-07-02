@@ -6,7 +6,7 @@ This repository contains the User Interface and data visualization software. Dat
 
 
 Installation
-=============
+-------------
 
 Just clone the repositorty and execute the usual django buildout programs.
 
@@ -25,7 +25,7 @@ $./bin/buildout
 
 
 Setting up Django
-===================
+-------------------
 
 In order to setup your django application, edit the ```src/behagunea/settings.py``` file and fill the following fields according to your configuration:
 ```
@@ -54,7 +54,7 @@ TEMPLATE_DIRS = (
 ```
 
 Setting up the Database
-=========================
+------------------------
 
 Django takes care of creating the database, but it requires that the schema exists in mysql.
 
@@ -71,11 +71,14 @@ $./bin/django syncdb
 ```
 
 * Common problems with syncdb: 
-- mysqldb is missing: install python-mysqldb package. 
-```$sudo apt-get install python-mysqldb
+*- mysqldb is missing: install python-mysqldb package. 
+
+```shell
+$sudo apt-get install python-mysqldb
 ```
-- syncdb complains about permission to access/create temporal files: 
+*- syncdb complains about permission to access/create temporal files: 
   execute the command again:
+
 ```shell
 $./bin/django syncdb
 ```
