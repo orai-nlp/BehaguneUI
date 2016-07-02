@@ -71,12 +71,12 @@ $./bin/django syncdb
 ```
 
 * Common problems with syncdb: 
-..* mysqldb is missing: install python-mysqldb package. 
+··* mysqldb is missing: install python-mysqldb package. 
 
 ```shell
 $sudo apt-get install python-mysqldb
 ```
-..* syncdb complains about permission to access/create temporal files: 
+··* syncdb complains about permission to access/create temporal files: 
   execute the command again:
 
 ```shell
