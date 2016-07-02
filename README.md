@@ -71,6 +71,7 @@ $./bin/django syncdb
 ```
 
 * Common problems with syncdb: 
+
 ··* mysqldb is missing: install python-mysqldb package. 
 
 ```shell
