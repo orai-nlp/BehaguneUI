@@ -29,9 +29,9 @@ MANAGERS = ADMINS
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql', # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
-        'NAME': 'DBNAME',                      # Or path to database file if using sqlite3.
-        'PASSWORD': 'DBPASSWORD',                  # Not used with sqlite3.
-        'USER':'DBUSER',                  # Not used with sqlite3.
+        'NAME': 'codefest_db',                      # Or path to database file if using sqlite3.
+        'PASSWORD': 'ubuntu',                  # Not used with sqlite3.
+        'USER':'root',                  # Not used with sqlite3.
         'HOST': '',                      # Set to empty string for localhost. Not used with sqlite3.
         'PORT': '',                      # Set to empty string for default. Not used with sqlite3.
     }
@@ -152,8 +152,8 @@ TEMPLATE_DIRS = (
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
     os.path.join(BASEDIR,'/behagunea_templates/'),
-    'PATH_TO/BehaguneUI/src/behagunea/behagunea_templates/',
-    'PATH_TO_BehaguneUI/src/behagunea/behagunea_templates/ajax/',
+    '/home/ubuntu/BehaguneUI/src/behagunea/behagunea_templates/',
+    '/home/ubuntu/BehaguneUI/src/behagunea/behagunea_templates/ajax/',
 )
 
 
