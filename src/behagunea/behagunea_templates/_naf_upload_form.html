@@ -1,0 +1,9 @@
+<h1>Visualize the contents of a NAF document</h1>
+<form method="post" action="naf" enctype="multipart/form-data">
+  {% csrf_token %}
+  <div class="form-group">
+    <label for="file">Select NAF file</label>
+    <input class="form-control" id="file" name="file" type="file" />
+  </div>
+  <button type="submit" class="btn btn-large btn-primary">Submit</button>
+</form>
