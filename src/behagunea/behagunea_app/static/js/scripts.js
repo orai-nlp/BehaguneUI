@@ -792,102 +792,72 @@ $('a[name=\'graph_selector\']').click(function () {
     }
   }
 });
-$('a[name=\'cloud_selector\']').click(function () {
-  if ($(this).attr('id') == 'selector_egileak') {
-    $('#selector_egileak').attr('class', 'active');
-    $('#selector_gakoak').attr('class', '')
-    var img = $('#tweets h3 img');
-    if ($(img).attr('src') == '/static/img/maximize.png') {
-      if ($('#row_1').css('display') != 'none') {
-        $('#sourceTagCloud').show();
-        $('#tagCloud').hide();
-        //$('#pieChart').show();  
-        if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_pie') {
-          $('#pieChart').show();
-          $('#countChart').hide();
-          $('#timeChart').hide();
-        }
-        if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_time') {
-          $('#pieChart').hide();
-          $('#countChart').hide();
-          $('#timeChart').show();
-        }
-        if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_count') {
-          $('#pieChart').hide();
-          $('#countChart').show();
-          $('#timeChart').hide();
-        }
-      }
-    } 
-    else {
 
-      $('#sourceTagCloud').show();
-      $('#tagCloud').hide();
-      //$('#pieChart').hide();
-      if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_pie') {
-        $('#pieChart').show();
-        $('#countChart').hide();
-        $('#timeChart').hide();
-      }
-      if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_time') {
-        $('#pieChart').hide();
-        $('#countChart').hide();
-        $('#timeChart').show();
-      }
-      if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_count') {
-        $('#pieChart').hide();
-        $('#countChart').show();
-        $('#timeChart').hide();
-      }
+var activate_tab = function(selector) {
+  console.log("Activating tab: " + selector);
+  $('#selector_egileak').removeClass('active');
+  $('#selector_gakoak').removeClass('active');
+  $('#selector_visualize').removeClass('active');
+  
+  $(selector).addClass('active')
+}
+
+var is_selector_minimized = function() {
+  var img = $('#tweets h3 img');
+  return $(img).attr('src') == '/static/img/maximize.png';
+}
+
+var is_selector_minimized = function() {
+  return ($('#row_1').css('display') != 'none');
+}
+
+var show_selector = function(selector) {
+  $('#sourceTagCloud').hide();
+  $('#tagCloud').hide();
+  $('#nafUpload').hide();
+  $(selector).show();  
+}
+
+var show_graph_selector = function() {
+  if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_pie') {
+    $('#pieChart').show();
+    $('#countChart').hide();
+    $('#timeChart').hide();
+  }
+  if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_time') {
+    $('#pieChart').hide();
+    $('#countChart').hide();
+    $('#timeChart').show();
+  }
+  if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_count') {
+    $('#pieChart').hide();
+    $('#countChart').show();
+    $('#timeChart').hide();
+  }
+}
+
+$('a[name=\'cloud_selector\']').click(function () {
+  var id_attribute = $(this).attr('id');
+  if (id_attribute == 'selector_egileak') {
+    activate_tab('#selector_egileak');
+    show_selector('#sourceTagCloud');
+  }
+  else if (id_attribute == "selector_gakoak") {
+    activate_tab('#selector_gakoak');
+    show_selector('#tagCloud');
+  }
+  else if (id_attribute == 'selector_visualize') {
+    activate_tab('#selector_visualize');
+    show_selector('#nafUpload');
+  }
+  
+  if (is_selector_minimized()) {
+    if (is_row_visible()) {
+      show_graph_selector();
     }
-  } 
+  }
   else {
-    $('#selector_egileak').attr('class', '');
-    $('#selector_gakoak').attr('class', 'active')
-    var img = $('#tweets h3 img');
-    if ($(img).attr('src') == '/static/img/maximize.png') {
-      if ($('#row_1').css('display') != 'none') {
-        $('#sourceTagCloud').hide();
-        $('#tagCloud').show();
-        //$('#pieChart').show();     
-        if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_pie') {
-          $('#pieChart').show();
-          $('#countChart').hide();
-          $('#timeChart').hide();
-        }
-        if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_time') {
-          $('#pieChart').hide();
-          $('#countChart').hide();
-          $('#timeChart').show();
-        }
-        if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_count') {
-          $('#pieChart').hide();
-          $('#countChart').show();
-          $('#timeChart').hide();
-        }
-      }
-    } 
-    else {
-      
-      $('#sourceTagCloud').hide();
-      $('#tagCloud').show();
-      //$('#pieChart').hide();
-      if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_pie') {
-        $('#pieChart').show();
-        $('#countChart').hide();
-        $('#timeChart').hide();
-      }
-      if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_time') {
-        $('#pieChart').hide();
-        $('#countChart').hide();
-        $('#timeChart').show();
-      }
-      if ($('a.active[name=\'graph_selector\']').attr('id') == 'selector_count') {
-        $('#pieChart').hide();
-        $('#countChart').show();
-        $('#timeChart').hide();
-      }
-    }
+    show_graph_selector();
   }
 });
 
