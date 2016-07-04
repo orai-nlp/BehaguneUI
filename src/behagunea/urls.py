@@ -6,7 +6,7 @@ from django.contrib.auth.views import logout
 from django.contrib import admin
 admin.autodiscover()
 import settings
-from behagunea_app import views
+from behagunea_app import views, naf_controller
 
 
 urlpatterns = [
@@ -27,7 +27,7 @@ urlpatterns = [
     url(r'manage_keywords',views.manage_keywords),
     url(r'stats',views.stats),    
     url(r'captcha/', include('captcha.urls')),
-    url(r'logout/$', logout,{'next_page': '/'}),
-
+    url(r'logout/$', logout, {'next_page': '/'}),
+    url(r'naf', naf_controller.visualize)
    
     ]
