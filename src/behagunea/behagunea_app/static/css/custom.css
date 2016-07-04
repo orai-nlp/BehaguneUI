@@ -150,7 +150,7 @@ li.parent:last-child{
 
 
 
-#selector_gakoak, #selector_egileak{
+#selector_gakoak, #selector_egileak, #selector_visualize{
   border: solid 1px #46A0DC;
   padding-top: 7px;
   padding-bottom: 0px;
@@ -162,7 +162,7 @@ li.parent:last-child{
   border-bottom: 0px;
 }
 
-#selector_gakoak.active,#selector_egileak.active {
+#selector_gakoak.active,#selector_egileak.active,#selector_visualize.active {
   color:#469FDC;
   font-weight: bold;
   border-bottom: solid 5px white !important;
@@ -358,6 +358,11 @@ display: none;
 
 #tagCloud{
    width:100%;
+}
+
+#nafUpload {
+  width: 100%;
+  display: none;
 }
 
 
