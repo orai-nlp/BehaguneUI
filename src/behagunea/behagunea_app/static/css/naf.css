@@ -1,0 +1,8 @@
+.text .wf {
+  display: inline-block;
+  font-size: 1.2em;
+}
+
+.text .wf:hover {
+  cursor: pointer;
+}
