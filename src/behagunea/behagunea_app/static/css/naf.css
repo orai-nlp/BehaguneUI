@@ -1,8 +1,14 @@
-.text .wf {
+.tokens .token {
   display: inline-block;
   font-size: 1.2em;
+  margin-right: 3px;
 }
 
-.text .wf:hover {
+.tokens .token.entity {
+  text-decoration: underline;
+  font-weight: bold;
+}
+
+.tokens .token:hover {
   cursor: pointer;
 }
