@@ -2,6 +2,7 @@ from django.shortcuts import render_to_response
 from django.template import RequestContext
 import xml.etree.ElementTree as ET
 import json
+import naf_constituency
 
 def get_target_ids(element):
     references_element = element.find('references')
@@ -110,7 +111,7 @@ def add_entities(naf, tokens):
         for target_id in target_ids:
             term_id_to_entity[target_id] = entity
         
-    result = []
+    partial_result = []
     for token in tokens:
         term_id = token['term_id']
         if term_id in term_id_to_entity:
@@ -118,8 +119,39 @@ def add_entities(naf, tokens):
             token.update(entity)
             token['is_entity'] = True
             
+        partial_result.append(token)
+        
+    result = []
+    for i in xrange(len(partial_result)):
+        token = partial_result[i]
+        previous_token = {"is_entity": False}
+        if i > 0:
+            previous_token = partial_result[i - 1]
+            
+        next_token = {"is_entity": False}
+        if i < len(partial_result) - 1:
+            next_token = partial_result[i + 1]
+            
+        token['is_entity_start'] = False
+        token['is_entity_end'] = False
+        
+        if token['is_entity']:
+            if not previous_token['is_entity']:
+                token['is_entity_start'] = True
+            elif previous_token.get('entity_id') != token['entity_id']:
+                token['is_entity_start'] = True
+            else:
+                token['is_entity_start'] = False
+                
+            if not next_token['is_entity']:
+                token['is_entity_end'] = True
+            elif next_token.get('entity_id') != token['entity_id']:
+                token['is_entity_end'] = True
+            else:
+                token['is_entity_end'] = False
+        
         result.append(token)
-
+        
     return result
 
 def visualize(request):
@@ -128,5 +160,12 @@ def visualize(request):
     tokens = retrieve_text(naf)
     tokens = add_terms(naf, tokens)
     tokens = add_entities(naf, tokens)
+    trees = naf_constituency.parse_constituency(naf, tokens)
     
-    return render_to_response('naf.html', {'tokens': tokens}, context_instance = RequestContext(request))
+    params = {'tokens': tokens}
+    if len(trees) > 0:
+        params['tree'] = json.dumps(trees[0].to_dict())
+    else:
+        params['tree'] = json.dumps({});
+    
+    return render_to_response('naf.html', params, context_instance = RequestContext(request))
