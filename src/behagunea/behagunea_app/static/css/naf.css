@@ -1,14 +1,29 @@
 .tokens .token {
-  display: inline-block;
+  display: inline;
   font-size: 1.2em;
   margin-right: 3px;
 }
 
-.tokens .token.entity {
-  text-decoration: underline;
+.tokens .entity {
+  display: inline-block;
+  border-bottom: 1px solid;
   font-weight: bold;
 }
 
 .tokens .token:hover {
   cursor: pointer;
 }
+
+.node circle {
+   fill: #fff;
+   stroke: steelblue;
+   stroke-width: 3px;
+ }
+
+ .node text { font: 12px sans-serif; }
+
+ .link {
+   fill: none;
+   stroke: #ccc;
+   stroke-width: 2px;
+ }
