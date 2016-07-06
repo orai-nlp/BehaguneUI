@@ -894,6 +894,7 @@
     </term>
     <!--instability-->
     <term id="t19" type="open" lemma="instability" pos="N" morphofeat="NN">
+      <sentiment polarity="negative" />
       <span>
         <target id="w19" />
       </span>
@@ -948,6 +949,7 @@
     </term>
     <!--illegal-->
     <term id="t28" type="open" lemma="illegal" pos="G" morphofeat="JJ">
+      <sentiment polarity="negative" />
       <span>
         <target id="w28" />
       </span>
@@ -960,6 +962,7 @@
     </term>
     <!--lucrative-->
     <term id="t30" type="open" lemma="lucrative" pos="G" morphofeat="JJ">
+      <sentiment polarity="positive" />
       <span>
         <target id="w30" />
       </span>
@@ -996,6 +999,7 @@
     </term>
     <!--bleak-->
     <term id="t36" type="open" lemma="bleak" pos="G" morphofeat="JJ">
+      <sentiment polarity="negative" />
       <span>
         <target id="w36" />
       </span>
@@ -1098,6 +1102,7 @@
     </term>
     <!--badly-->
     <term id="t53" type="open" lemma="badly" pos="A" morphofeat="RB">
+      <sentiment polarity="negative" />
       <span>
         <target id="w53" />
       </span>
