@@ -4,6 +4,21 @@
   margin-right: 3px;
 }
 
+.tokens .token.sentiment-positive {
+  background: #BBDEB6;
+  padding: 1px;
+}
+
+.tokens .token.sentiment-negative {
+  background: #DEB6B6;
+  padding: 1px;
+}
+
+.tokens .token.sentiment-neutral {
+  background: #CCCCCC;
+  padding: 1px;
+}
+
 .tokens .entity {
   display: inline-block;
   border-bottom: 1px solid;

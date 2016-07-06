@@ -40,8 +40,8 @@
           {% if token.is_entity_start %}
           <span class='entity'>
           {% endif %}
-          <span class='token' data-sentence="{{token.sentence}}" data-length="{{token.length}}" data-paragraph="{{token.paragraph}}" data-offset="{{token.offset}}" data-id="{{token.id}}" data-lemma="{{token.lemma}}"
-          data-spos="{{token.simple_pos}}" data-pos="{{token.pos}}" data-type="{{token.type}}" data-entity="{{token.is_entity}}" data-entity-type="{{token.entity_type}}">{{ token.word }}</span>
+          <span class='{{token.class}}' data-sentence="{{token.sentence}}" data-length="{{token.length}}" data-paragraph="{{token.paragraph}}" data-offset="{{token.offset}}" data-id="{{token.id}}" data-lemma="{{token.lemma}}"
+          data-spos="{{token.simple_pos}}" data-pos="{{token.pos}}" data-type="{{token.type}}" data-entity="{{token.is_entity}}" data-entity-type="{{token.entity_type}}" data-polarity="{{ token.polarity }}">{{ token.word }}</span>
           {% if token.is_entity_end %}
           </span>
           {% endif %}

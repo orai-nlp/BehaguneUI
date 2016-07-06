@@ -72,18 +72,32 @@ def add_terms(naf, tokens):
     for term_element in terms_element.findall('term'):
         target_ids = get_target_ids(term_element)
         for target_id in target_ids:
+            sentiment_element = term_element.find('sentiment')
+            polarity = 'none'
+            if sentiment_element is not None:
+                polarity = sentiment_element.get('polarity', 'none')
             term_id = term_element.get('id')
             term_type = term_element.get('type')
             lemma = term_element.get('lemma')
             simple_pos = term_element.get('pos')
             pos = term_element.get('morphofeat')
             
+            css_classes = ['token']
+            if polarity == 'positive':
+                css_classes.append('sentiment-positive')
+            elif polarity == 'negative':
+                css_classes.append('sentiment-negative')
+            elif polarity == 'neutral':
+                css_classes.append('sentiment-neutral')
+            
             wf_id_to_term[target_id] = {
                 "term_id": term_id,
                 "type": term_type,
                 "lemma": lemma,
                 "simple_pos": simple_pos,
-                "pos": pos
+                "pos": pos,
+                "polarity": polarity,
+                "class": " ".join(css_classes)
             }
     
     result = []
