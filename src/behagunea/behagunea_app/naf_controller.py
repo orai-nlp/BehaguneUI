@@ -70,20 +70,21 @@ def add_terms(naf, tokens):
     wf_id_to_term = {}
     
     for term_element in terms_element.findall('term'):
-        target_id = get_target_ids(term_element)[0]
-        term_id = term_element.get('id')
-        term_type = term_element.get('type')
-        lemma = term_element.get('lemma')
-        simple_pos = term_element.get('pos')
-        pos = term_element.get('morphofeat')
-        
-        wf_id_to_term[target_id] = {
-            "term_id": term_id,
-            "type": term_type,
-            "lemma": lemma,
-            "simple_pos": simple_pos,
-            "pos": pos
-        }
+        target_ids = get_target_ids(term_element)
+        for target_id in target_ids:
+            term_id = term_element.get('id')
+            term_type = term_element.get('type')
+            lemma = term_element.get('lemma')
+            simple_pos = term_element.get('pos')
+            pos = term_element.get('morphofeat')
+            
+            wf_id_to_term[target_id] = {
+                "term_id": term_id,
+                "type": term_type,
+                "lemma": lemma,
+                "simple_pos": simple_pos,
+                "pos": pos
+            }
     
     result = []
     for token in tokens:
