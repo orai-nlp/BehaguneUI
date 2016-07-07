@@ -4365,5 +4365,3 @@ def manage_keywords(request):
     keywords = Keyword.objects.all()
     keyword_form = KeywordForm()
     return render_to_response('manage_keywords.html', {"keywords":keywords,"keyword_form": keyword_form}, context_instance = RequestContext(request))    
-
-

@@ -1,0 +1,44 @@
+.tokens .token {
+  display: inline;
+  font-size: 1.2em;
+  margin-right: 3px;
+}
+
+.tokens .token.sentiment-positive {
+  background: #BBDEB6;
+  padding: 1px;
+}
+
+.tokens .token.sentiment-negative {
+  background: #DEB6B6;
+  padding: 1px;
+}
+
+.tokens .token.sentiment-neutral {
+  background: #CCCCCC;
+  padding: 1px;
+}
+
+.tokens .entity {
+  display: inline-block;
+  border-bottom: 1px solid;
+  font-weight: bold;
+}
+
+.tokens .token:hover {
+  cursor: pointer;
+}
+
+.node circle {
+   fill: #fff;
+   stroke: steelblue;
+   stroke-width: 3px;
+ }
+
+ .node text { font: 12px sans-serif; }
+
+ .link {
+   fill: none;
+   stroke: #ccc;
+   stroke-width: 2px;
+ }

@@ -213,6 +213,7 @@
                 <h3 class="">{% trans "Etiketa lainoa" %}</h3>
                 <a name="cloud_selector" class="active" id="selector_gakoak">{% trans "Gako-hitzak" %}</a>
                 <a class="" name="cloud_selector" id="selector_egileak">{% trans "Egileak" %}</a>
+                <a class="" name="cloud_selector" id="selector_visualize">Visualize NAF</a>
                 <h3><a class="minimize_maximize" href="#"><img src="{{ STATIC_URL}}img/minimize.png" style="float:right; width:20px;"/></a></h3>
             </div>
             <div id="row_1">
@@ -226,6 +227,7 @@
                     <div class="post-preview">
                         <div id="tagCloud"></div>
                         <div id="sourceTagCloud"></div>
+                        <div id="nafUpload"> {% include '_naf_upload_form.html' %}</div>
                     </div>
                 </div>
                 <div class="percent_30">
@@ -440,4 +442,3 @@
 
     </body>
 </html>
-
