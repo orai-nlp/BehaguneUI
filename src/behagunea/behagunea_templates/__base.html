@@ -1,0 +1,153 @@
+{% load i18n %}
+{% load tags %}
+
+<!DOCTYPE html>
+<html>
+  <head>
+    {% block meta_tags %}
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    {% endblock %}
+    
+    <title>
+      {% block title %}{% trans "Talaia" %}{% endblock %}
+    </title>
+    
+    {% block stylesheets %}
+    <!-- Bootstrap Core CSS -->
+    <!--<link href="{{ STATIC_URL }}css/bootstrap.min.css" rel="stylesheet">-->
+    <link href="{{ STATIC_URL }}img/favicon.ico" rel="icon" />
+    <!-- Custom CSS -->
+    <!--<link href="{{ STATIC_URL }}css/clean-blog.css" rel="stylesheet">-->
+    <link href="{{ STATIC_URL }}css/font.css" rel="stylesheet">
+    <link href="{{ STATIC_URL }}css/template.css" rel="stylesheet">
+    <link href="{{ STATIC_URL }}css/perso.css" rel="stylesheet">
+    <link href="{{ STATIC_URL }}css/svg-responsive.css" rel="stylesheet">
+    <link href="{{ STATIC_URL }}css/custom.css" rel="stylesheet">
+    <link href="{{ STATIC_URL }}css/tooltipster.css" rel="stylesheet">
+    <!--Emoji rendering styles-->
+    <link href="{{ STATIC_URL }}css/emoji.css" rel="stylesheet">
+    <!-- Custom Fonts -->
+    <link href="http://maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+    <link href='http://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800' rel='stylesheet' type='text/css'>
+    {% endblock %}
+
+    {% block javascript %}
+    {% endblock %}
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body data-spy="scroll" data-target="#menuEzkerra" class="site com_k2 view-item layout-item no-task itemid-1113">
+    <div class="body goitop">
+            <div class="container">
+                <header class="header span6" role="banner">
+                    <div class="custom">
+                        <p><a href=""><img src="{{ STATIC_URL}}images/logo_haut.jpeg" alt="hauteskundeen termometroa" width="100" height="40"></a><a target="blank_" title="eitb" href="http://eitb.eus"><img src="{{ STATIC_URL}}images/eitb-logo.png" width="100" height="40"></a><a target="blank_" title="Elhuyar Fundazioa" href="https://www.elhuyar.eus/"><img src="{{ STATIC_URL}}images/elhuyar-ht-garden-noht.png" style="padding-left:20px;"></a></p>
+                    </div>
+                </header>
+                <div class="span6">
+                    <!--<div class="custom pull-right sozialak">
+                        <p><a href="http://energiaolatuak.dss2016.eu/es/boletin?view=default">{% trans "buletina" %}&nbsp; </a><a href="https://www.facebook.com/dss2016" target="_blank"><img onmouseover="this.src='{{ STATIC_URL }}/img/ico-azul-face.png';" onmouseout="this.src='{{ STATIC_URL }}/img/ico-gris-face.png';" src="{{ STATIC_URL }}/img/ico-gris-face.png" alt="ico-gris-face" width="40" height="40"></a><a href="https://twitter.com/DSS2016" target="_blank"><img onmouseover="this.src='{{ STATIC_URL }}/img/ico-azul-twi.png';" onmouseout="this.src='{{ STATIC_URL }}/img/ico-gris-twi.png';" src="{{ STATIC_URL }}/img/ico-gris-twi.png" alt="ico-gris-twi" width="40" height="40"></a><a href="https://instagram.com/dss2016" target="_blank"><img onmouseover="this.src='{{ STATIC_URL }}/img/ico-azul-inst.png';" onmouseout="this.src='{{ STATIC_URL }}/img/ico-gris-inst.png';" src="{{ STATIC_URL }}/img/ico-gris-inst.png" alt="ico-gris-inst" width="40" height="40"></a><a href="https://www.youtube.com/user/sansebastian2016" target="_blank"><img onmouseover="this.src='{{ STATIC_URL }}/img/ico-azul-tube.png';" onmouseout="this.src='{{ STATIC_URL }}/img/ico-gris-tube.png';" src="{{ STATIC_URL }}/img/ico-gris-tube.png" alt="ico-gris-tube" width="40" height="40"></a>&nbsp;<a title="Hiria" href="http://www.donostia.eus/bizi2016" target="_blank"><img style="margin-left: 15px;" onmouseover="this.src='{{ STATIC_URL }}/img/info_azul.png';" onmouseout="this.src='{{ STATIC_URL }}/img/info_gris.png';" src="{{ STATIC_URL }}/img/info_gris.png" alt="info gris" width="25" height="25"></a></p>
+                    </div>-->
+                    <div class="mod-languages hizkuntzak">
+                        <ul class="lang-inline">
+                            {% for key,value in LANGUAGES %}
+                            {% if LANGUAGE_CODE == key %}
+                            <li class="lang-active" dir="ltr">
+                                <a href="">{{ key|upper }}</a>
+                            </li>
+                            {% else %}
+                            <li>
+                                <form name="setLang{{ key }}" action="/talaia_eae2016/i18n/setlang/" method="POST">{% csrf_token %}
+                                    <input name="next" type="hidden" value="#" />
+                                    <input type="hidden" name="language" value="{{ key }}" />
+                                </form>
+                                <a href="#" onclick="document.setLang{{ key }}.submit();return false;">{{ key|upper }}</a>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="mobile">
+            <h2><a href="/talaia_eae2016/">Termometroa</a></h2>
+        </div>
+        <ul class="profile_menu">
+            {% if user.is_authenticated %}
+            <li class=""><a href="/talaia_eae2016/logout/">{% trans "Atera" %}</a></li>
+            <li class=""><a href="/talaia_eae2016/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
+            <li class=""><a href="/talaia_eae2016/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
+            <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
+            <li class=""><a href="/talaia_eae2016/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
+            {% else %}
+            <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
+            <li class=""><a href="/talaia_eae2016/stats">{% trans "Ikusi estatistikak" %}</a></li>
+            <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
+            {% endif %}
+        </ul>  
+	<div class="body saltua parafi">
+        {% block pageMenu %}
+        {% endblock %}	  
+	</div>
+	<!-- Main Content -->
+        <div class="container">     
+        {% block content %}
+        {% endblock %}
+	</div>
+	<hr>
+	{% block modals %}
+	<div id="loading_modal" class="modal text-center" style="display:none;">
+	  <h1>{% trans "Datuak eguneratzen..." %}</h1>
+	  <img src="{{ STATIC_URL}}img/ajax-loader.gif"/>
+	</div>
+	<div id="modal_tweets" class="modal text-center" style="display:none;" data-backdrop="static"></div>
+	<div class="modal fade" id="login-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true" style="display: none;">
+	  <div class="modal-dialog">
+	    <div class="loginmodal-container">
+              <h1 style="float:right;"><a href="#" data-toggle="modal" data-target="#login-modal">x</a></h1>
+              <br>
+              <h1>{% trans "Sartu zure kontuan" %}</h1>
+              <br>
+              <form method="POST" action="">{% csrf_token %}
+		{{ login_form }}
+		<input type="submit" name="login" class="login loginmodal-submit" value="{% trans 'Sartu' %}">
+              </form>
+              <!--<div class="login-help">
+		  <a href="#">{% trans "Erregistratu" %}</a> - <a href="#">{% trans "Pasahitza ahaztu duzu?" %}</a>
+              </div>-->
+	    </div>
+	  </div>
+	</div>
+	<div class="modal fade" id="mention-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true" style="display: none;">
+	  <div class="modal-dialog">
+	    <div class="loginmodal-container">
+              <h1 style="float:right;"><a href="#" data-toggle="modal" data-target="#mention-modal">x</a></h1>
+              <br>
+              <h1>{% trans "Bidali zure iritzia" %}</h1>
+              <br>
+              <form method="POST" action="">{% csrf_token %}
+		{{ mention_form }}
+		<input type="submit" name="mention" class="login loginmodal-submit" value="{% trans 'Bidali' %}">
+              </form>
+              <!--<div class="login-help">
+		  <a href="#">{% trans "Erregistratu" %}</a> - <a href="#">{% trans "Pasahitza ahaztu duzu?" %}</a>
+              </div>-->
+	    </div>
+	  </div>
+	</div>
+	{% endblock %}
+	<footer class="footer" role="contentinfo" >
+	  {% include "_footer.html" %}	  
+	</footer>
+
+	{% block visualizationScripts %}
+	{% endblock %}
+
+  </body>
+</html>
