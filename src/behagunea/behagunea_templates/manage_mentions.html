@@ -23,11 +23,11 @@
           <li class=""><a href="/talaia_eae2016/logout/">{% trans "Atera" %}</a></li>
           <li class=""><a href="/talaia_eae2016/manage_mentions/">{% trans "Kudeatu aipamenak" %}</a></li>
           <li class=""><a href="/talaia_eae2016/manage_keywords/">{% trans "Kudeatu gakoak" %}</a></li>
-          <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
+          <!--<li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>-->
           <li class=""><a href="/talaia_eae2016/stats">{% trans "Ikusi estatistikak" %}</a></li>
           <li class="welcome_text">{% trans "Ongi etorri " %}<em>{{ user.username }}</em></li>
           {% else %}
-          <li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>
+          <!--<li class=""><a href="#" data-toggle="modal" data-target="#mention-modal">{% trans "Bidali iritzia" %}</a></li>-->
           <li class=""><a href="/talaia_eae2016/stats">{% trans "Ikusi estatistikak" %}</a></li>
           <li class=""><a href="#" data-toggle="modal" data-target="#login-modal">Login</a></li>
           {% endif %}
@@ -35,11 +35,11 @@
 	
         <li class="parent" style="border-left-style: none;">
           <div class="botoiak" data-toggle="buttons">
-            <label class="btn btn-lg btn-success {% if category != 'ez_zuzendu' and category != '' %} active{% endif %}" name="{% trans 'Zuzendu gabeak' %}">
+            <label class="btn btn-lg btn-success {% if category != 'ez_zuzendu' and category != '' %}active{% endif %}" name="{% trans 'Zuzendu gabeak' %}">
               <input type="radio" name="table_options" id="ez_zuzendu1" autocomplete="off" checked class="jarri">
               <i class="fa fa-check"></i> {% trans "Zuzendu gabeak" %}
             </label>
-            <label class="btn btn-lg btn-danger {% if category == 'ez_zuzendu' and category == '' %} active{% endif %}">
+            <label class="btn btn-lg btn-danger {% if category == 'ez_zuzendu' or category == '' %}active{% endif %}">
               <input type="radio" name="table_options" id="ez_zuzendu2" autocomplete="off" class="kendu">
               <i class="fa fa-times"></i> {% trans "Zuzendu gabeak" %}
             </label>          

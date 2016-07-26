@@ -1,8 +1,10 @@
+var server_root='/talaia_eae2016';
+
 function show_all_tweets(type) {
   $('#loading_modal').modal('show');
   $.ajax({
     method: 'GET',
-    url: '/reload_tweets',
+    url: server_root+'/reload_tweets',
     dataType: 'html',
     data: {
       category: $('#id_category').val(),
@@ -34,7 +36,7 @@ function show_all_tweets_pagination(type, page) {
   $('#loading_modal').modal('show');
   $.ajax({
     method: 'GET',
-    url: '/reload_tweets',
+    url: server_root+'/reload_tweets',
     dataType: 'html',
     data: {
       category: $('#id_category').val(),
@@ -66,8 +68,8 @@ $('#tag_cloud .minimize_maximize').click(function () {
   $('#row_1').slideToggle(500);
   var img = $(this).find('img');
   var containers = $(".svg-container svg");
-  if ($(img).attr('src') == '/static/img/maximize.png') {
-    img.attr('src', '/static/img/minimize.png');
+  if ($(img).attr('src') == server_root+'/static/img/maximize.png') {
+    img.attr('src', server_root+'/static/img/minimize.png');
     if ($('#row_2').css('display') != 'none') { // irekia dago tweetena
       w = global_w;
       h = w/3.8;
@@ -143,7 +145,7 @@ $('#tag_cloud .minimize_maximize').click(function () {
     }
   } 
   else
-  img.attr('src', '/static/img/maximize.png');
+  img.attr('src', server_root+'/static/img/maximize.png');
   return false;
 });
 $('#tweets .minimize_maximize').click(function () {
@@ -152,14 +154,14 @@ $('#tweets .minimize_maximize').click(function () {
   var containers = $(".svg-container svg");
 
   
-  if ($(img).attr('src') == '/static/img/maximize.png') {
+  if ($(img).attr('src') == server_root+'/static/img/maximize.png') {
     w = $('#tagCloud').parent().parent().width();
     h = $('#tagCloud').parent().parent().width()/3.8;
     $(containers).each(function(){
         //$(this)[0].setAttribute('viewBox', '0 0 '+ w +' '+ h );
         $(this).attr("width", w).attr("height", h);
     });
-    img.attr('src', '/static/img/minimize.png');
+    img.attr('src', server_root+'/static/img/minimize.png');
     if ($('#row_1').css('display') != 'none') {
       if ($('a[name=\'cloud_selector\'].active').attr('id') == 'selector_egileak') { // egileak erakutsi behar dira
         $('#tagCloud').hide();
@@ -191,7 +193,7 @@ $('#tweets .minimize_maximize').click(function () {
     }
   } 
   else {
-    img.attr('src', '/static/img/maximize.png');
+    img.attr('src', server_root+'/static/img/maximize.png');
     w = $('#tagCloud').parent().parent().width();
     h = $('#tagCloud').parent().parent().width()/1.7;
     $(containers).each(function(){
@@ -715,7 +717,7 @@ function stats_page_filters(){
   $("#id_category").change(function(){
   $.ajax({
     method: 'GET',
-    url: '/reload_projects_filter',
+    url: server_root+'/reload_projects_filter',
     dataType: 'html',
     data: {
       category: $(this).val()
@@ -730,13 +732,13 @@ function stats_page_filters(){
 $('a[name=\'graph_selector\']').click(function () {
   if ($(this).attr('id') == 'selector_pie') {
     $('#selector_pie').attr('class', 'active');
-    $('#selector_pie img').attr('src', '/static/img/pie_selected.png');
+    $('#selector_pie img').attr('src', server_root+'/static/img/pie_selected.png');
     $('#selector_time').attr('class', '');
-    $('#selector_time img').attr('src', '/static/img/chart.png');
+    $('#selector_time img').attr('src', server_root+'/static/img/chart.png');
     $('#selector_count').attr('class', '');
-    $('#selector_count img').attr('src', '/static/img/count.png');
+    $('#selector_count img').attr('src', server_root+'/static/img/count.png');
     var img = $('#tweets h3 img');
-    if ($(img).attr('src') == '/static/img/maximize.png') {
+    if ($(img).attr('src') == server_root+'/static/img/maximize.png') {
       if ($('#row_1').css('display') != 'none') {
         $('#pieChart').show();
         $('#timeChart').hide();
@@ -751,13 +753,13 @@ $('a[name=\'graph_selector\']').click(function () {
   }
   if ($(this).attr('id') == 'selector_time') {
     $('#selector_pie').attr('class', '');
-    $('#selector_pie img').attr('src', '/static/img/pie.png');
+    $('#selector_pie img').attr('src', server_root+'/static/img/pie.png');
     $('#selector_time').attr('class', 'active')
-    $('#selector_time img').attr('src', '/static/img/chart_selected.png');
+    $('#selector_time img').attr('src', server_root+'/static/img/chart_selected.png');
     $('#selector_count').attr('class', '');
-    $('#selector_count img').attr('src', '/static/img/count.png');
+    $('#selector_count img').attr('src', server_root+'/static/img/count.png');
     var img = $('#tweets h3 img');
-    if ($(img).attr('src') == '/static/img/maximize.png') {
+    if ($(img).attr('src') == server_root+'/static/img/maximize.png') {
       if ($('#row_1').css('display') != 'none') {
         $('#pieChart').hide();
         $('#timeChart').show();
@@ -772,13 +774,13 @@ $('a[name=\'graph_selector\']').click(function () {
   }
   if ($(this).attr('id') == 'selector_count') {
     $('#selector_pie').attr('class', '');
-    $('#selector_pie img').attr('src', '/static/img/pie.png');
+    $('#selector_pie img').attr('src', server_root+'/static/img/pie.png');
     $('#selector_time').attr('class', '')
-    $('#selector_time img').attr('src', '/static/img/chart.png');
+    $('#selector_time img').attr('src', server_root+'/static/img/chart.png');
     $('#selector_count').attr('class', 'active');
-    $('#selector_count img').attr('src', '/static/img/count_selected.png');
+    $('#selector_count img').attr('src', server_root+'/static/img/count_selected.png');
     var img = $('#tweets h3 img');
-    if ($(img).attr('src') == '/static/img/maximize.png') {
+    if ($(img).attr('src') == server_root+'/static/img/maximize.png') {
       if ($('#row_1').css('display') != 'none') {
         $('#pieChart').hide();
         $('#timeChart').hide();
@@ -804,7 +806,7 @@ var activate_tab = function(selector) {
 
 var is_selector_minimized = function() {
   var img = $('#tweets h3 img');
-  return $(img).attr('src') == '/static/img/maximize.png';
+  return $(img).attr('src') == server_root+'/static/img/maximize.png';
 }
 
 var is_selector_minimized = function() {
@@ -891,7 +893,7 @@ function reload_with_filters() {
   //$("#id_category").val(category);
   $.ajax({
     method: 'GET',
-    url: '/reload_page',
+    url: server_root+'/reload_page',
     dataType: 'html',
     data: {
       category: $('#id_category').val(),
@@ -961,7 +963,7 @@ function reload_with_filters_stats() {
   $('#loading_modal').modal('show');
   $.ajax({
     method: 'GET',
-    url: '/reload_page_stats/',
+    url: server_root+'/reload_page_stats/',
     dataType: 'html',
     data: {
       date_b: $('#id_date_b').val(),
@@ -1035,7 +1037,7 @@ function reload_from_manage_mentions_button(category) {
   //$('#loading_modal').modal('show');
   /*$.ajax({
     method: 'GET',
-    url: '/reload_manage_mentions_page',
+    url: server_root+'/reload_manage_mentions_page',
     dataType: 'html',
     data: {
       category: category
@@ -1079,7 +1081,7 @@ function table_click(input) {
 function update_polarity(check) {
   $.ajax({
     method: 'GET',
-    url: '/update_polarity',
+    url: server_root+'/update_polarity',
     dataType: 'html',
     data: {
       polarity: $(check).val(),
@@ -1097,7 +1099,7 @@ function load_keyword_form(id) {
   // load from AJAX
   $.ajax({
     method: 'GET',
-    url: '/keyword_form',
+    url: server_root+'/keyword_form',
     dataType: 'html',
     data: {
       id: id
@@ -1119,7 +1121,7 @@ function delete_mention(id) {
   if (response) {
     $.ajax({
       method: 'GET',
-      url: '/delete_mention',
+      url: server_root+'/delete_mention',
       dataType: 'html',
       data: {
         id: id
