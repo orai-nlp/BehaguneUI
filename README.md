@@ -85,6 +85,15 @@ $./bin/django syncdb
 ```
 
 
+Setting up the l10n (localzation)
+----------------------------
+
+Inteface localization is provided for Basque, English, Spanish and French. In order to have it working however you have to compile the translation messages. Execute the following command in the installation directory:
+
+```shell
+$./bin/django compilemessages
+```
+
 Launch Django
 ================
 
