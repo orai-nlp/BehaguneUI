@@ -1,4 +1,4 @@
-var server_root='/talaia_eae2016';
+var server_root='';
 
 function show_all_tweets(type) {
   $('#loading_modal').modal('show');

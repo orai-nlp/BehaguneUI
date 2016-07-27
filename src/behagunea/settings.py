@@ -29,9 +29,9 @@ MANAGERS = ADMINS
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql', # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
-        'NAME': 'codefest_db',                      # Or path to database file if using sqlite3.
-        'PASSWORD': 'ubuntu',                  # Not used with sqlite3.
-        'USER':'root',                  # Not used with sqlite3.
+        'NAME': 'Behagunea_db',                      # Or path to database file if using sqlite3.
+        'PASSWORD': 'd552O1Gsql',                  # Not used with sqlite3.
+        'USER':'dss2016',                  # Not used with sqlite3.
         'HOST': '',                      # Set to empty string for localhost. Not used with sqlite3.
         'PORT': '',                      # Set to empty string for default. Not used with sqlite3.
     }
@@ -73,7 +73,7 @@ MEDIA_URL = '/uploads/'
 # Don't put anything in this directory yourself; store your static files
 # in apps' "static/" subdirectories and in STATICFILES_DIRS.
 # Example: "/home/media/media.lawrence.com/static/"
-STATIC_ROOT = 'PATH_TO/BehaguneUI/src/behagunea/behagunea_app/static/'
+STATIC_ROOT = '/mnt/ebs/BehaguneUI-codefest/src/behagunea/behagunea_app/static/'
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
@@ -152,8 +152,8 @@ TEMPLATE_DIRS = (
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
     os.path.join(BASEDIR,'/behagunea_templates/'),
-    '/home/ubuntu/BehaguneUI/src/behagunea/behagunea_templates/',
-    '/home/ubuntu/BehaguneUI/src/behagunea/behagunea_templates/ajax/',
+    '/mnt/ebs/BehaguneUI-codefest/src/behagunea/behagunea_templates/',
+    '/mnt/ebs/BehaguneUI-codefest/src/behagunea/behagunea_templates/ajax/',
 )
 
 

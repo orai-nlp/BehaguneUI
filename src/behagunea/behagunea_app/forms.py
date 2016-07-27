@@ -97,7 +97,7 @@ keys = sorted(set(keys),key=lambda x: x[1])
 class MentionForm(forms.Form):
     username = forms.CharField(required=True)
     text = forms.CharField(required=True,widget=forms.Textarea())
-    captcha = CaptchaField()
+    #captcha = CaptchaField()
     language = forms.CharField(required=True,widget=forms.Select(choices=(('',''),('eu',_("EU")),('es',_("ES")),('en',_("EN")),('fr',_('FR')))))
     keywords = forms.MultipleChoiceField(required=True,choices=keys)
     
