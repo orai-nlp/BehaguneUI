@@ -208,7 +208,61 @@ def reload_manage_mentions_page(request):
 @login_required
 def export(request):
     """Export mentions from DB"""
-    mention_keywords = Keyword_Mention.objects.filter(mention__manual_polarity__in=("P","N","NEU"))
+    date_b = request.GET.get("date_b","")
+    date_e = request.GET.get("date_e","")
+    if date_b != "":
+        date_b = date_b.split('-')[0]+'-'+date_b.split('-')[1]+'-'+date_b.split('-')[2]
+        print date_b
+    if date_e != "":
+        date_e = date_e.split('-')[0]+'-'+date_e.split('-')[1]+'-'+date_e.split('-')[2]
+    project = request.GET.get("project","")
+    category = request.GET.get("category","")
+    
+    if date_b != "":    
+        if date_e != "":
+            if project != "":
+                if category != "": # date_b + date_e + category + project
+                    query = Q(keyword__screen_tag = project, keyword__category = category, mention__date__gt=date_b, mention__date__lt=date_e)
+ 
+                else: # date_b + date_e + project
+                    query = Q(keyword__screen_tag = project, mention__date__gt=date_b, mention__date__lt=date_e) 
+            else:
+                if category != "": # date_b + date_e + category
+                    query = Q(keyword__category = category, mention__date__gt=date_b, mention__date__lt=date_e) 
+                else: # date_b + date_e
+                    query = Q(mention__date__gt=date_b, mention__date__lt=date_e) 
+        elif project != "": 
+            if category != "": # date_b + project + category
+                query = Q(keyword__screen_tag = project, keyword__category = category, mention__date__gt=date_b) 
+            else: # date_b + project
+                query = Q(keyword__screen_tag = project, mention__date__gt=date_b) 
+        elif category != "": # date_b + category
+            query = Q(keyword__category = category, mention__date__gt=date_b) 
+        else: # date_b
+            query = Q(mention__date__gt=date_b) 
+    elif date_e != "":
+        if project != "":
+            if category != "": # date_e + category + project
+                query = Q(keyword__screen_tag = project, keyword__category = category, mention__date__lt=date_e) 
+            else: # date_e + project
+                query = Q(keyword__screen_tag = project, mention__date__lt=date_e) 
+        elif category != "": # date_e + category
+            query = Q(keyword__category = category, mention__date__lt=date_e) 
+        else: # date_e
+            query = Q(mention__date__lt=date_e) 
+    elif project != "":
+        if category != "": #project + category
+            query = Q(keyword__screen_tag = project, keyword__category = category) 
+        else: # project
+            query = Q(keyword__screen_tag = project) 
+    elif category != "": # category
+        query = Q(keyword__category = category) 
+    
+    else: # ALL
+        query = Q()
+    
+    
+    mention_keywords = Keyword_Mention.objects.filter(query,mention__manual_polarity__in=("P","N","NEU"))
     
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="'+_('export')+'.csv"'
@@ -544,7 +598,7 @@ def export_stats(request):
 
     while len(balioak_n)<20:
         balioak_n+=['']
-        keywords+=['']
+        keywords_n+=['']
     while len(balioak_p)<20:
         balioak_p+=['']
         keywords_p+=['']
@@ -3818,13 +3872,13 @@ def reload_page_stats(request):
     top_media_categories = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_media))
     top_media_values = map(lambda x: x.get("dcount"),top_media)
 
-    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="P",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity="P",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_media_pos = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_media_categories_pos = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_media_pos))
     top_media_values_pos = map(lambda x: x.get("dcount"),top_media_pos)
 
-    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="N",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity="N",mention__source__type="press"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_media_neg = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_media_categories_neg = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_media_neg))
@@ -3839,13 +3893,13 @@ def reload_page_stats(request):
     top_twitter_categories = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_twitter))
     top_twitter_values = map(lambda x: x.get("dcount"),top_twitter)
 
-    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="P",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity="P",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_twitter_pos = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_twitter_categories_pos = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_twitter_pos))
     top_twitter_values_pos = map(lambda x: x.get("dcount"),top_twitter_pos)
 
-    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity__in="N",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
+    mentions = Keyword_Mention.objects.filter(Q(mention__manual_polarity="N",mention__source__type="Twitter"),query).values('mention__source__source_name').annotate(dcount=Count('mention__source__source_name')).order_by('-dcount')
 
     top_twitter_neg = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_twitter_categories_neg = ",".join(map(lambda x: '"'+x.get('mention__source__source_name')+'"',top_twitter_neg))
@@ -4055,7 +4109,7 @@ def stats(request):
 
     top_twitter_pos = sorted(mentions,key=lambda x:x.get('dcount'),reverse=True)[:20]    
     top_twitter_categories_pos = ",".join(map(lambda x: '"'+x.get('source__source_name')+'"',top_twitter_pos))
-    top_twitter_values_pos = map(lambda x: x.get("dcount"),top_media_pos)
+    top_twitter_values_pos = map(lambda x: x.get("dcount"),top_twitter_pos)
 
     mentions = Mention.objects.filter(date__gt=date,manual_polarity="N",source__type="Twitter").values('source__source_name').annotate(dcount=Count('source__source_name')).order_by('-dcount')
 
@@ -4365,3 +4419,5 @@ def manage_keywords(request):
     keywords = Keyword.objects.all()
     keyword_form = KeywordForm()
     return render_to_response('manage_keywords.html', {"keywords":keywords,"keyword_form": keyword_form}, context_instance = RequestContext(request))    
+
+
